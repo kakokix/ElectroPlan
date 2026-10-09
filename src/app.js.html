@@ -612,7 +612,13 @@
     if (id.indexOf('s:') === 0) return parts.shared.filter(function (r) { return r.id === id; })[0] || null;
     return APPDB.refs.filter(function (r) { return r.id === id; })[0] || null;
   }
-  function typeBtn(t) { return '<button type="button" class="p-item" data-ptype="' + t.id + '"' + (parts.sel === 't:' + t.id ? ' aria-current="true"' : '') + '>' + typeIco(t.id) + '<span class="p-t"><b>' + esc(t.name) + '</b><small>' + esc(catName(t.cat)) + ' · fiche générale</small></span></button>'; }
+  var REF_COUNT = {};
+  APPDB.refs.forEach(function (r) { REF_COUNT[r.type] = (REF_COUNT[r.type] || 0) + 1; });
+  function refCountTxt(id) {
+    var n = (REF_COUNT[id] || 0) + parts.shared.filter(function (r) { return r.type === id; }).length;
+    return n ? n + ' référence' + (n > 1 ? 's' : '') : 'fiche générale';
+  }
+  function typeBtn(t) { return '<button type="button" class="p-item" data-ptype="' + t.id + '"' + (parts.sel === 't:' + t.id ? ' aria-current="true"' : '') + '>' + typeIco(t.id) + '<span class="p-t"><b>' + esc(t.name) + '</b><small>' + esc(catName(t.cat)) + ' · ' + refCountTxt(t.id) + '</small></span></button>'; }
   function refBtn(r) {
     var t = APPDB.types[r.type];
     return '<button type="button" class="p-item" data-pref="' + esc(r.id) + '"' + (parts.sel === r.id ? ' aria-current="true"' : '') + '>' + typeIco(r.type) +
@@ -628,7 +634,7 @@
         var ts = Object.keys(APPDB.types).filter(function (id) { return APPDB.types[id].cat === c[0]; });
         h += '<section class="p-sec"><h3>' + esc(c[1]) + ' <small>' + ts.length + '</small></h3><div class="p-grid">' + ts.map(function (id) { return typeBtn(APPDB.types[id]); }).join('') + '</div></section>';
       });
-      h += '<p class="note p-about">' + ic('db') + APPDB.refs.length + ' références vérifiées (Legrand, Schneider Electric, Hager, Wago…) et ' + Object.keys(APPDB.types).length + ' fiches, relevées en ' + APPDB_DATE + '.' +
+      h += '<p class="note p-about">' + ic('db') + APPDB.refs.length + ' références vérifiées (Legrand, Schneider Electric, Hager, ABB, Eaton, WAGO, Somfy, Atlantic, Thermor, Delta Dore…) et ' + Object.keys(APPDB.types).length + ' fiches, relevées en ' + APPDB_DATE + '.' +
            (parts.shared.length ? ' Plus ' + parts.shared.length + ' fiche' + (parts.shared.length > 1 ? 's' : '') + ' ajoutée' + (parts.shared.length > 1 ? 's' : '') + ' par la recherche en direct.' : '') + '</p>';
       return h;
     }

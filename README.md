@@ -6,7 +6,7 @@ Plans de câblage pour apprentis électriciens. Tu décris ce qu'il y a dans ta 
 - le **tableau électrique** (différentiels, disjoncteurs, télérupteurs, contacteurs, ponts à faire) ;
 - le **schéma unifilaire**, les **étiquettes** à imprimer et la **liste des fils** avec les longueurs ;
 - le **câblage pas à pas** et des **exercices** pour s'entraîner ;
-- une **recherche d'appareillage** par vraie référence ou par nom (bornes, câblage, fonctionnement).
+- une **recherche d'appareillage** par vraie référence ou par nom, dans plus de 2 000 références (bornes, câblage, fonctionnement).
 
 Les règles suivent la NF C 15-100 (édition 2024).
 

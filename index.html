@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="ElectroPlan dessine ta boîte de dérivation avec ses bornes Wago, le tableau électrique, le schéma unifilaire, les étiquettes et la liste des fils, selon la NF C 15-100. Recherche d'appareillage par référence. Un outil ElectroLearn pour les apprentis électriciens.">
-<meta name="theme-color" content="#0d59f2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#101318" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
 <link rel="canonical" href="https://kakokix.github.io/ElectroPlan/">
 <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -19,10 +19,8 @@
 <meta property="og:image" content="https://kakokix.github.io/ElectroPlan/icon-192.png">
 <style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <title>ElectroPlan · plans de câblage NF C 15-100</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Grotesk:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="fonts/fonts.css">
+<script defer src="vendor/jspdf.umd.min.js"></script>
 <style>
 /* ElectroPlan, un outil de la famille ElectroLearn : couleurs, polices et composants repris de electrolearn.netlify.app
    (fond presque blanc, cartes blanches à bord bleuté, dégradé bleu → cyan, Space Grotesk pour les titres, DM Sans pour le texte).
@@ -45,32 +43,7 @@
   --font-body: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-num: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --radius: 12px; --radius-md: 10px; --radius-sm: 8px; --side-w: 400px; --mnav-h: 62px;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #101318; --surface: #171a21; --surface-2: #272c35; --ink: #f0f2f4; --muted: #8f96a3; --line: #272c35; --line-strong: #363c48;
-    --primary: #13daec; --secondary: #306ee8; --accent: #8152e0; --on-primary: #101318;
-    --primary-5: rgba(19, 218, 236, .05); --primary-10: rgba(19, 218, 236, .1); --primary-15: rgba(19, 218, 236, .15); --primary-25: rgba(19, 218, 236, .25);
-    --warn: #fbbf24; --warn-bg: rgba(251, 191, 36, .08); --warn-line: rgba(251, 191, 36, .3); --info: #7ee9f4; --info-bg: rgba(19, 218, 236, .07); --info-line: rgba(19, 218, 236, .25);
-    --danger: #f87171; --on-danger: #1a0606; --ok: #4ade80;
-    --paper-surround: #0c0f13; --chip: #f4f6f8; --focus: #13daec; --scrim: rgba(0, 0, 0, .66);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4); --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, .45), 0 2px 4px -2px rgba(0, 0, 0, .4);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, .5), 0 4px 6px -4px rgba(0, 0, 0, .45); --shadow-soft: 0 4px 20px -4px rgba(19, 218, 236, .2);
-    --sw-line: rgba(255, 255, 255, .5);
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #101318; --surface: #171a21; --surface-2: #272c35; --ink: #f0f2f4; --muted: #8f96a3; --line: #272c35; --line-strong: #363c48;
-  --primary: #13daec; --secondary: #306ee8; --accent: #8152e0; --on-primary: #101318;
-  --primary-5: rgba(19, 218, 236, .05); --primary-10: rgba(19, 218, 236, .1); --primary-15: rgba(19, 218, 236, .15); --primary-25: rgba(19, 218, 236, .25);
-  --warn: #fbbf24; --warn-bg: rgba(251, 191, 36, .08); --warn-line: rgba(251, 191, 36, .3); --info: #7ee9f4; --info-bg: rgba(19, 218, 236, .07); --info-line: rgba(19, 218, 236, .25);
-  --danger: #f87171; --on-danger: #1a0606; --ok: #4ade80;
-  --paper-surround: #0c0f13; --chip: #f4f6f8; --focus: #13daec; --scrim: rgba(0, 0, 0, .66);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4); --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, .45), 0 2px 4px -2px rgba(0, 0, 0, .4);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, .5), 0 4px 6px -4px rgba(0, 0, 0, .45); --shadow-soft: 0 4px 20px -4px rgba(19, 218, 236, .2);
-  --sw-line: rgba(255, 255, 255, .5);
-  color-scheme: dark;
+  color-scheme: light;   /* design clair uniquement, même si le téléphone est en mode sombre */
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -728,6 +701,76 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
 [data-ui="mobile"] .p-item { min-height: 52px; }
 [data-ui="mobile"] .f-actions button { width: 100%; }
 @media (max-width: 1000px) { [data-ui="pc"] .p-cols { grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); } }
+
+/* ---------------------------------------------------------------- matériel : liste de courses, fils et longueurs */
+.lists > section.mat-seg { background: none; border: 0; box-shadow: none; padding: 0; }
+.mat-seg .seg { max-width: 480px; }
+.mat-seg .seg button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.mat-seg .seg .i { width: 16px; height: 16px; }
+.lists > p.mat-more { text-align: center; color: var(--muted); font-size: 13.5px; }
+.lists h2 small { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+.shop-ch.ask { border-color: var(--primary); box-shadow: var(--shadow-soft); }
+.shop-chd > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; margin: -4px -6px; padding: 4px 6px; border-radius: var(--radius-md); }
+.shop-chd > summary::-webkit-details-marker { display: none; }
+.shop-chd > summary:hover .shop-chm { text-decoration: underline; }
+.shop-cht { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.shop-cht .card-title { margin: 0 !important; }
+.shop-chs { font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.shop-chm { flex: none; font-size: 13.5px; font-weight: 600; color: var(--primary); }
+.shop-chd[open] > summary { margin-bottom: 10px; }
+.shop-chd[open] > summary .chev { transform: translateY(2px) rotate(225deg); }
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 12px; margin: 2px 0 12px; }
+.shop-fam { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 12px; display: grid; gap: 10px; align-content: start; background: var(--bg); }
+.shop-fam legend { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.shop-fam legend .i { width: 15px; height: 15px; color: var(--primary); }
+.shop-f { display: grid; gap: 5px; min-width: 0; font-size: 13px; font-weight: 500; color: var(--ink); }
+.shop-f select { background: var(--surface); }
+.shop-f.need select { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-15); font-weight: 600; }
+.shop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.shop-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 12px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.shop-row.miss { border-color: var(--warn-line); background: var(--warn-bg); }
+.shop-row.skip { opacity: .72; }
+.shop-q { display: grid; place-items: center; min-height: 32px; padding: 0 6px; border-radius: var(--radius-sm); background: var(--primary-10); color: var(--primary); font: 700 14px var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shop-row.plain .shop-q { background: var(--surface-2); color: var(--ink); }
+.shop-m { display: grid; gap: 6px; min-width: 0; }
+.shop-l { font-weight: 600; font-size: 14.5px; line-height: 1.35; }
+.shop-len { font-size: 13px; color: var(--muted); margin-top: -3px; }
+.shop-m select { height: 36px; background: var(--surface); font-size: 13.5px; text-overflow: ellipsis; }
+.shop-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 13px; color: var(--muted); }
+.shop-sub .mono { color: var(--ink); font-size: 13.5px; }
+.shop-sub .linkbtn { font-size: 13px; }
+.shop-warn { margin: 0; font-size: 13px; line-height: 1.45; color: var(--warn); }
+.shop-note { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.checks li { position: relative; padding: 8px 12px 8px 38px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); font-size: 14px; line-height: 1.45; }
+.checks li::before { position: absolute; left: 12px; top: 9px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; line-height: 1; }
+.checks li.ok::before { content: '✓'; background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.checks li.ko { border-color: var(--warn-line); background: var(--warn-bg); }
+.checks li.ko::before { content: '!'; background: var(--surface); color: var(--warn); border: 1px solid var(--warn-line); }
+.checks li.inf::before { content: 'i'; background: var(--info-bg); color: var(--info); border: 1px solid var(--info-line); font-family: Georgia, 'Times New Roman', serif; font-style: italic; }
+.shop-rules { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.shop-rules summary { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 12px; cursor: pointer; list-style: none; font-weight: 600; font-size: 14px; border-radius: var(--radius-md); }
+.shop-rules summary::-webkit-details-marker { display: none; }
+.shop-rules summary:hover { background: var(--surface-2); }
+.shop-rules summary .chev { margin-left: auto; }
+.shop-rules[open] summary .chev { transform: translateY(2px) rotate(225deg); }
+.shop-rules ul { margin: 0; padding: 2px 14px 12px 30px; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; }
+.shop-rules a { color: var(--primary); font-weight: 600; }
+.shop-act .row-actions { margin-bottom: 10px; }
+[data-ui="mobile"] .shop-row { grid-template-columns: 48px minmax(0, 1fr); gap: 4px 10px; padding: 10px; }
+[data-ui="mobile"] .shop-m select { height: 44px; font-size: 15px; }
+[data-ui="mobile"] .mat-seg .seg { max-width: none; }
+[data-ui="mobile"] .mat-seg .seg button { min-height: 44px; }
+[data-ui="mobile"] .shop-rules summary { min-height: 48px; }
+
+/* ---------------------------------------------------------------- mentions légales */
+#ov-legal { --dlg-w: 660px; }
+.legal { gap: 16px; }
+.legal section { display: grid; gap: 6px; }
+.legal h3 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: -.01em; }
+.legal p { margin: 0; font-size: 14px; line-height: 1.55; }
+.legal a { color: var(--primary); font-weight: 600; }
+.foot .linkbtn, .foot-brand .linkbtn { font-weight: 600; }
 </style>
 
 </head>
@@ -785,6 +828,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
   <symbol id="i-hash" viewBox="0 0 24 24"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></symbol>
   <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
   <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
 </svg>
 
@@ -843,7 +887,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
         <p class="hint" id="id-hint"></p>
       </section>
       <p class="foot m-only">Plans pour l'apprentissage, à faire valider par ton formateur : vérifie les repères des bornes sur tes appareils et câble toujours hors tension.</p>
-      <p class="foot-brand m-only">ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a></p>
+      <p class="foot-brand m-only">ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a> · <button type="button" class="linkbtn" data-do="legal">Mentions légales et confidentialité</button></p>
     </aside>
 
     <div class="resizer pc-only" id="resizer" role="separator" aria-orientation="vertical" aria-controls="panel" aria-label="Largeur du volet des circuits" tabindex="0" title="Glisse pour changer la largeur du volet (double-clic : largeur normale)"></div>
@@ -855,7 +899,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
           <button type="button" role="tab" id="tab-box" data-tab="box" aria-selected="true">Boîte<kbd>1</kbd></button>
           <button type="button" role="tab" id="tab-tab" data-tab="tab" aria-selected="false">Tableau<kbd>2</kbd></button>
           <button type="button" role="tab" id="tab-uni" data-tab="uni" aria-selected="false">Unifilaire<kbd>3</kbd></button>
-          <button type="button" role="tab" id="tab-list" data-tab="list" aria-selected="false"><span class="tl">Fils et longueurs</span><span class="ts">Fils</span><kbd>4</kbd></button>
+          <button type="button" role="tab" id="tab-list" data-tab="list" aria-selected="false"><span class="tl">Matériel</span><span class="ts">Matériel</span><kbd>4</kbd></button>
           <button type="button" role="tab" id="tab-labels" data-tab="labels" aria-selected="false">Étiquettes<kbd>5</kbd></button>
           <button type="button" role="tab" id="tab-steps" data-tab="steps" aria-selected="false">Pas à pas<kbd>6</kbd></button>
           <button type="button" role="tab" id="tab-quiz" data-tab="quiz" aria-selected="false">Entraînement<kbd>7</kbd></button>
@@ -876,7 +920,8 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
           <button type="button" data-exp="labels" hidden>PDF des étiquettes (taille réelle)<small>À imprimer à 100 %, sans ajuster à la page</small></button>
           <button type="button" data-exp="png">PNG<small>Image du plan affiché</small></button>
           <button type="button" data-exp="svg">SVG<small>Plan affiché, net à toutes les tailles</small></button>
-          <button type="button" data-exp="pdf">PDF complet<small>Boîtes, tableau, unifilaire et liste des fils</small></button>
+          <button type="button" data-exp="pdf">PDF complet<small>Boîtes, tableau, unifilaire, fils et liste de courses</small></button>
+          <button type="button" data-exp="shop" hidden>Liste de courses<small>Ce qu’il faut acheter, avec les références (tableur CSV)</small></button>
           <button type="button" data-exp="csv">CSV des fils<small>Liste des fils pour un tableur</small></button>
         </div>
       </div>
@@ -893,7 +938,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
           <button type="button" data-zoom="one" title="Taille réelle">100 %</button>
         </div>
       </div>
-      <p class="foot pc-only"><span>Plans pour l'apprentissage, à faire valider par ton formateur : vérifie les repères des bornes sur tes appareils et câble toujours hors tension.</span><span>ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a></span></p>
+      <p class="foot pc-only"><span>Plans pour l'apprentissage, à faire valider par ton formateur : vérifie les repères des bornes sur tes appareils et câble toujours hors tension.</span><span>ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a> · <button type="button" class="linkbtn" data-do="legal">Mentions légales</button></span></p>
     </main>
 
     <button type="button" class="fab m-only" id="fab-add" data-do="add" aria-haspopup="dialog" aria-controls="ov-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter un circuit</button>
@@ -902,7 +947,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
   <nav class="mnav m-only" aria-label="Sections">
     <button type="button" data-view="edit"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-zap"/></svg></span><span class="nl">Circuits</span><span class="dot" id="nav-dot" hidden></span></button>
     <button type="button" data-view="plans"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-plans"/></svg></span><span class="nl">Plans</span></button>
-    <button type="button" data-view="list"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-cable"/></svg></span><span class="nl">Fils</span></button>
+    <button type="button" data-view="list"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg></span><span class="nl">Matériel</span></button>
     <button type="button" data-view="steps"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-checks"/></svg></span><span class="nl">Pas à pas</span></button>
     <button type="button" data-view="quiz"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg></span><span class="nl">Exercices</span></button>
     <button type="button" data-view="parts"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span><span class="nl">Appareils</span></button>
@@ -931,7 +976,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
     <div class="ov-body menu">
       <button type="button" class="mi m-only" data-do="gen"><svg class="i" aria-hidden="true"><use href="#i-house"/></svg><span>Logement selon la norme…</span><small>Les circuits minimum d'un T1 à un T5</small></button>
       <button type="button" class="mi m-only" data-do="saved"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg><span>Mes installations…</span><small>Enregistrer, ouvrir une autre installation</small></button>
-      <button type="button" class="mi m-only" id="mi-dl" data-do="dl" hidden><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span>Télécharger…</span><small>PDF, image ou liste des fils</small></button>
+      <button type="button" class="mi m-only" id="mi-dl" data-do="dl" hidden><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span>Télécharger…</span><small>PDF, image, liste des fils ou de courses</small></button>
       <button type="button" class="mi" id="btn-sample"><svg class="i" aria-hidden="true"><use href="#i-book"/></svg><span>Charger l'exemple de maquette</span></button>
       <div class="mi-group">
         <span id="uimode-l">Interface</span>
@@ -943,6 +988,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
         <p class="hint" id="uimode-hint"></p>
       </div>
       <a class="mi brand-link" href="https://electrolearn.netlify.app/" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="#i-sparkles"/></svg><span>Ouvrir ElectroLearn</span><svg class="i ext" aria-hidden="true"><use href="#i-ext"/></svg><small>Cours, exercices et contrôles</small></a>
+      <button type="button" class="mi" data-do="legal"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>Mentions légales et confidentialité</span><small>Éditeur, hébergeur, données, marques</small></button>
       <button type="button" class="mi pc-only" data-do="keys"><svg class="i" aria-hidden="true"><use href="#i-keyboard"/></svg><span>Raccourcis clavier</span><kbd>?</kbd></button>
       <button type="button" class="mi danger" id="btn-clear"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg><span class="t">Tout effacer</span></button>
     </div>
@@ -966,7 +1012,7 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
     <div class="ov-head"><h2 id="ov-keys-t">Raccourcis clavier</h2><button type="button" class="ibtn" data-close aria-label="Fermer"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <div class="ov-body">
       <dl class="keys">
-        <dt><kbd>1</kbd> à <kbd>8</kbd></dt><dd>Changer d'onglet : Boîte, Tableau, Unifilaire, Fils, Étiquettes, Pas à pas, Entraînement, Appareils</dd>
+        <dt><kbd>1</kbd> à <kbd>8</kbd></dt><dd>Changer d'onglet : Boîte, Tableau, Unifilaire, Matériel (liste de courses, fils), Étiquettes, Pas à pas, Entraînement, Appareils</dd>
         <dt><kbd>/</kbd></dt><dd>Chercher un appareil (référence ou nom)</dd>
         <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoomer, dézoomer le plan</dd>
         <dt><kbd>0</kbd></dt><dd>Ajuster le plan à la largeur</dd>
@@ -978,6 +1024,32 @@ dl.keys dd { margin: 0; font-size: 14.5px; }
         <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Enregistrer l'installation</dd>
         <dt><kbd>Échap</kbd></dt><dd>Fermer une fenêtre</dd>
       </dl>
+    </div>
+  </div>
+
+  <div class="ov dlg tall" id="ov-legal" role="dialog" aria-labelledby="ov-legal-t" tabindex="-1" hidden>
+    <div class="ov-head"><h2 id="ov-legal-t">Mentions légales et confidentialité</h2><button type="button" class="ibtn" data-close aria-label="Fermer"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="ov-body legal">
+      <p class="hint" id="legal-claude" hidden>Tu regardes la version privée d’ElectroPlan dans Claude : elle est servie par claude.ai (Anthropic). Tes installations et ton avancement sont gardés dans ton compte Claude, et la recherche en direct envoie la référence cherchée à Claude, avec ton compte. Dans cette version, les polices viennent de Google Fonts et le module PDF de cdnjs (Cloudflare). Les mentions ci-dessous concernent le site public.</p>
+      <section><h3>Éditeur</h3>
+        <p>ElectroPlan est un site personnel, gratuit et non commercial, publié à titre non professionnel par l’utilisateur GitHub « kakokix ». C’est un outil de la famille ElectroLearn.</p>
+        <p>La loi pour la confiance dans l’économie numérique (LCEN, article 1-1) permet à un éditeur non professionnel de ne publier que l’identité et l’adresse de son hébergeur.</p>
+        <p>Contact : par la <a href="https://github.com/kakokix/ElectroPlan" target="_blank" rel="noopener">page du projet sur GitHub</a>.</p></section>
+      <section><h3>Hébergeur</h3>
+        <p>GitHub, Inc. (service GitHub Pages), 88 Colin P Kelly Jr Street, San Francisco, CA 94107, États-Unis. Téléphone : +1 877 448 4820. <a href="https://github.com" target="_blank" rel="noopener">github.com</a></p></section>
+      <section><h3>Données personnelles et cookies</h3>
+        <p>ElectroPlan ne demande ni compte, ni nom, ni adresse e-mail. Il n’utilise ni cookie, ni mesure d’audience, ni publicité.</p>
+        <p>Tes installations, ton avancement et tes réglages d’affichage sont gardés dans ton navigateur (stockage local), sur ton appareil seulement : ils ne sont envoyés à personne. Ce stockage sert uniquement à ce que tu demandes au site ; il ne demande donc pas de consentement (article 82 de la loi Informatique et Libertés). Pour l’effacer : menu « Plus d’actions », puis « Tout effacer », ou supprime les données du site dans ton navigateur.</p>
+        <p>Les polices et le module PDF sont servis par le site lui-même : aucune autre société n’est contactée quand tu l’utilises. Comme tout hébergeur, GitHub reçoit l’adresse IP des visiteurs pour faire fonctionner et protéger le service : voir sa <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">déclaration de confidentialité</a>. Le lien « Chercher la notice » ouvre Google, seulement si tu cliques dessus.</p></section>
+      <section><h3>Marques et références</h3>
+        <p>Les marques et noms de produits cités (Legrand, Schneider Electric, Hager, WAGO, Somfy…) appartiennent à leurs propriétaires ; ils servent seulement à désigner les produits. ElectroPlan n’est lié à aucun fabricant ni distributeur et ne vend rien.</p>
+        <p>Les références et leurs désignations ont été relevées sur les sites des fabricants et des distributeurs : chaque fiche donne le lien de sa source. Elles peuvent changer : vérifie toujours la notice de l’appareil.</p></section>
+      <section><h3>Norme et responsabilité</h3>
+        <p>ElectroPlan est un outil d’apprentissage. Il s’appuie sur la norme NF C 15-100, éditée par AFNOR (dont il ne reproduit pas le texte), et sur des guides publics de fabricants. Il ne remplace ni la norme, ni la notice des appareils, ni l’avis d’un professionnel.</p>
+        <p>Travaille toujours hors tension et fais valider ton travail par ton formateur. En entreprise, les travaux électriques demandent une habilitation électrique.</p></section>
+      <section><h3>Licences</h3>
+        <p>Polices DM Sans, Space Grotesk, Barlow et IBM Plex Mono : licence SIL Open Font License 1.1. Module PDF jsPDF : licence MIT. Les textes des licences sont dans le <a href="https://github.com/kakokix/ElectroPlan" target="_blank" rel="noopener">dépôt du site</a>.</p></section>
+      <p class="hint">Dernière mise à jour : 9 octobre 2026.</p>
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -6781,11 +6853,530 @@ function ficheHtml(t, r, opts) {
 if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: searchApp, ficheHtml: ficheHtml, termSvg: termSvg, refKey: refKey, normTxt: normTxt };
 </script>
 <script>
+/* ============================================================ ElectroPlan — liste de courses (sans DOM)
+   Ce qu'il faut acheter pour l'installation en cours. On choisit une marque (ou une gamme) par famille de produits ;
+   pour chaque article, la liste propose les références compatibles de la base (APP_REFS), la meilleure en premier.
+   Rien n'est inventé : un article sans référence dans la base reste « à choisir ». */
+var SHOP_COL = { R: 'rouge', B: 'bleu', GY: 'vert/jaune', K: 'noir', M: 'marron', O: 'orange', V: 'violet', G: 'gris' };
+var SHOP_SECTIONS = [['tab', 'Tableau électrique', 'panel'], ['box', 'Boîtes de dérivation et bornes', 'box'], ['mur', 'Interrupteurs et prises', 'plug'],
+                     ['enc', 'Boîtes d’encastrement et DCL', 'layers'], ['fil', 'Fils et gaines', 'cable'], ['eqp', 'Appareils à prévoir', 'zap']];
+// appareil du plan → type de référence murale
+var SHOP_WALL = { sw1: 'vv', vv: 'vv', sw2: 'dvv', perm: 'perm', bp: 'bp', swl: 'voyant', swt: 'voyant', dim: 'var', det: 'det', vrsw: 'vrs',
+                  socket: 'pc', vmcsw: 'vmcc', bps: 'bps', heater: 'sdc', rad: 'sdc', plate: 'sdc' };
+var SHOP_WALL_NAME = { vv: 'Interrupteur va-et-vient (simple allumage)', dvv: 'Double va-et-vient (double allumage)', perm: 'Permutateur', bp: 'Bouton-poussoir',
+                       voyant: 'Interrupteur à voyant', var: 'Variateur', det: 'Détecteur (interrupteur automatique)', vrs: 'Interrupteur de volet roulant',
+                       pc: 'Prise de courant 2P+T 16 A', vmcc: 'Commande de VMC 2 vitesses', bps: 'Bouton de sonnette', sdc: 'Sortie de câble' };
+// la même borne dans les autres séries WAGO (même nombre d'entrées)
+var SHOP_WAGO = { '2273': { '221-412': '2273-202', '221-413': '2273-203', '221-415': '2273-205' },
+                  '2773': { '221-412': '2773-402', '221-413': '2773-403', '221-415': '2773-405', '2273-208': '2773-408' } };
+var SHOP_MODS = { id: 2, dj: 1, tl: 1, mn: 1, km: 1, hz: 1, cr: 1, fpm: 1, trs: 2, son: 1, is: 1 };   // modules quand la fiche ne le dit pas
+var SHOP_ROW = 13;   // modules par rangée dans les coffrets de logement courants
+var SHOP_ASK = { tab: 'Choisis la marque de ton tableau (en haut) pour voir les références compatibles.',
+                 mur: 'Choisis la gamme de tes interrupteurs et prises (en haut) pour voir les références compatibles.' };
+
+function shopDefaults() { return { tab: '', gamme: '', term: '', mur: '', color: 'blanc', support: 'mac', boxBrand: '', bddBrand: '', wago: '221', gaineBrand: '', picks: {} }; }
+// choix gardés avec l'installation (relus depuis le stockage : on ne garde que des valeurs simples)
+function shopClean(o) {
+  var d = shopDefaults();
+  if (!o || typeof o !== 'object') return d;
+  ['tab', 'gamme', 'mur', 'boxBrand', 'bddBrand', 'gaineBrand'].forEach(function (k) { if (typeof o[k] === 'string') d[k] = o[k].slice(0, 80); });
+  if (o.term === 'vis' || o.term === 'auto') d.term = o.term;
+  if (o.color === '') d.color = '';
+  if (o.wago === '2273' || o.wago === '2773') d.wago = o.wago;
+  if (o.support === 'cloison' || o.support === 'air') d.support = o.support;
+  if (o.picks && typeof o.picks === 'object') Object.keys(o.picks).slice(0, 300).forEach(function (k) { if (typeof o.picks[k] === 'string') d.picks[String(k).slice(0, 60)] = o.picks[k].slice(0, 80); });
+  return d;
+}
+// les marques gardent leur choix quand l'installation change (nouveau logement, exemple…) ; les choix article par article repartent de zéro
+function shopKeep(o) { var d = shopClean(o); d.picks = {}; return d; }
+
+/* lecture des désignations */
+function shopTxt(r) { return r.name + ' ' + (r.specs || ''); }
+function shopCal(r) { var m = /(\d+(?:[.,]\d+)?)\s?A\b/.exec(r.name) || /(\d+(?:[.,]\d+)?)\s?A\b/.exec(r.specs || ''); return m ? parseFloat(m[1].replace(',', '.')) : 0; }
+function shopPoles(r) {
+  var t = shopTxt(r);
+  if (/1\s?P\s?\+\s?N|phase\s?\+\s?neutre|ph\s?\+\s?N\b/i.test(t)) return '1P+N';
+  if (/3\s?P\s?\+\s?N/i.test(t)) return '3P+N';
+  if (/\b4\s?P\b|t[ée]trapolaire|4 pôles/i.test(t)) return '4P';
+  if (/\b3\s?P\b|tripolaire/i.test(t)) return '3P';
+  if (/\b2\s?P\b|bipolaire|2 pôles/i.test(t)) return '2P';
+  if (/\b1\s?P\b|unipolaire/i.test(t)) return '1P';
+  return '';
+}
+function shopCurve(r) { var m = /courbe\s*([BCD])\b/i.exec(shopTxt(r)); return m ? m[1].toUpperCase() : ''; }
+// raccordement : 'vis', 'auto' (automatique, sans vis), 'mixte' (l'un en haut, l'autre en bas) ou 'emb' (embrochable)
+function shopTerm(r) {
+  var t = shopTxt(r);
+  if (/embrochable/i.test(t)) return 'emb';
+  if (/automatique|\bauto\b|sans vis|sanvis|ressort|quickconnect/i.test(t)) return /\bvis\b/i.test(t.replace(/sans vis/ig, '')) ? 'mixte' : 'auto';
+  if (/\bvis\b/i.test(t)) return 'vis';
+  return '';
+}
+function shopIdType(r) {
+  var m = /type\s*(AC|A\s?-?\s?si|F\s?-?\s?si|Hpi|A|F|B)(?![A-Za-z])/i.exec(shopTxt(r));
+  if (!m) return '';
+  var v = m[1].toUpperCase().replace(/[\s-]/g, '');
+  return v === 'HPI' || v === 'FSI' ? 'F' : (v === 'ASI' ? 'A' : v);
+}
+var SHOP_ID_OK = { AC: ['AC', 'A', 'F'], A: ['A', 'F'], F: ['F'] };   // un type supérieur convient aussi (A protège aussi comme AC, F comme A)
+function shopColorScore(r, color) {
+  if (!color) return 0;
+  var t = shopTxt(r).toLowerCase();
+  return /blanc|white/.test(t) ? 0 : (/alu|anthracite|noir|titane|silver|vulcain|inox|bronze|\bor\b|graphite|sable|beige|ivoire|gris|dark|mat\b/.test(t) ? 2 : 1);
+}
+function shopBrandKey(r) { return r.brand + '|' + (r.range || ''); }
+function shopRefs() { return (typeof APPDB !== 'undefined' ? APPDB.refs : []); }
+// famille d'appareils modulaires qui partagent le même peigne (la gamme ne suffit pas toujours à le dire)
+function shopFam(r) {
+  var g = (r.range || '') + ' ' + shopTxt(r);
+  if (r.brand === 'Schneider Electric') return /Resi9 XE|embrochable/i.test(g) ? 'Resi9 XE' : (/Resi9/i.test(g) ? 'Resi9 XP' : 'Acti9');
+  if (r.brand === 'Hager') return /sanvis|sans vis|quickconnect|quickbusbar|bornes auto/i.test(g) ? 'sans vis' : 'à vis';
+  return '';
+}
+// nombre de modules d'un appareil modulaire, lu dans sa fiche
+function shopMods(r, kind) {
+  var t = shopTxt(r), m;
+  if ((m = /(\d+)\s?modules?\b/i.exec(t))) return Number(m[1]);
+  if ((m = /(\d+)\s?pas de 9\s?mm/i.exec(t))) return Math.ceil(Number(m[1]) / 2);
+  if ((m = /(\d+)\s?×\s?17[,.]5\s?mm/i.exec(t))) return Number(m[1]);
+  if ((m = /\b(18|36|54|72)\s?mm\b/.exec(t))) return Number(m[1]) / 18;
+  return SHOP_MODS[kind] || 1;
+}
+function shopLen(r) { var m = /(\d+)\s?m\b/.exec(r.name); return m ? Number(m[1]) : 0; }
+// nombre d'entrées d'une borne WAGO (écrit dans sa désignation, sinon le dernier chiffre de la référence : 221-413 → 3)
+function shopWagoN(ref, name) { var m = /(\d+)\s?conducteurs/i.exec(name || ''); if (m) return Number(m[1]); m = /(\d)$/.exec(ref || ''); return m ? Number(m[1]) : 0; }
+
+/* marques et gammes proposées */
+function shopTabBrands() {
+  var by = {};
+  shopRefs().forEach(function (r) { if (r.type === 'dj' || r.type === 'id') { by[r.brand] = by[r.brand] || {}; by[r.brand][r.type] = (by[r.brand][r.type] || 0) + 1; } });
+  return Object.keys(by).filter(function (b) { return by[b].dj && by[b].id; }).sort(function (a, b) { return (by[b].dj + by[b].id) - (by[a].dj + by[a].id) || (a < b ? -1 : 1); });
+}
+// peigne : 'pn' (phase + neutre), 'p' (barre de phase seule), 'n' (barre de neutre seule)
+function shopPeignePart(r) {
+  var t = shopTxt(r);
+  if (/\(neutre\)|isolant bleu|^peigne d.alimentation neutre/i.test(t)) return 'n';
+  if (/\(phase\)|isolant marron|^peigne d.alimentation phase horizontal/i.test(t)) return 'p';
+  return /phase\s?(\+|et)\s?neutre|1\s?P\s?\+\s?N|uni \+ neutre|ph\s?\+\s?N\b|répartiteur/i.test(t) ? 'pn' : '';
+}
+// gammes de disjoncteurs 1P+N courbe C d'une marque : d'abord celles qui ont aussi leur peigne et leurs différentiels dans la base
+function shopTabRanges(brand) {
+  var by = {}, R = shopRefs();
+  R.forEach(function (r) {
+    if (r.type !== 'dj' || r.brand !== brand || !r.range || shopPoles(r) !== '1P+N') return;
+    var cv = shopCurve(r); if (cv && cv !== 'C') return;
+    by[r.range] = (by[r.range] || 0) + 1;
+  });
+  var score = {};
+  Object.keys(by).forEach(function (g) {
+    var f = shopFam({ brand: brand, range: g, name: '', specs: '' });
+    var hasP = R.some(function (r) { return r.type === 'peigne' && r.brand === brand && shopFam(r) === f && shopPeignePart(r) === 'pn'; });
+    var hasI = R.some(function (r) { return r.type === 'id' && r.brand === brand && shopFam(r) === f; });
+    // les appareils embrochables demandent un coffret de leur système : on les propose en dernier
+    score[g] = by[g] + (hasP ? 10 : 0) + (hasI ? 5 : 0) - (/XE|embrochable/i.test(g) ? 8 : 0);
+  });
+  return Object.keys(by).filter(function (k) { return by[k] >= 3; }).sort(function (a, b) { return score[b] - score[a] || (a < b ? -1 : 1); });
+}
+var SHOP_MUR_TYPES = ['vv', 'dvv', 'perm', 'bp', 'voyant', 'var', 'det', 'vrs', 'pc', 'usb', 'sdc', 'rj', 'bip', 'vmcc', 'bps'];
+function shopWallRanges() {
+  var by = {};
+  shopRefs().forEach(function (r) {
+    if (SHOP_MUR_TYPES.indexOf(r.type) < 0 || !r.range) return;
+    var k = shopBrandKey(r); by[k] = by[k] || { n: 0, t: {} }; by[k].n++; by[k].t[r.type] = 1;
+  });
+  // une gamme complète : au moins des interrupteurs et des prises
+  return Object.keys(by).filter(function (k) { return by[k].n >= 8 && by[k].t.vv && by[k].t.pc; }).sort(function (a, b) { return by[b].n - by[a].n || (a < b ? -1 : 1); });
+}
+function shopBrandsOf(test) {
+  var by = {};
+  shopRefs().forEach(function (r) { if (test(r)) by[r.brand] = (by[r.brand] || 0) + 1; });
+  return Object.keys(by).sort(function (a, b) { return by[b] - by[a] || (a < b ? -1 : 1); });
+}
+function shopBoxBrands() { return shopBrandsOf(function (r) { return r.type === 'bat' || (r.type === 'dcl' && /bo[iî]te|kit|point de centre/i.test(r.name)); }); }
+function shopBddBrands() { return shopBrandsOf(function (r) { return r.type === 'bdd'; }); }
+function shopGaineBrands() { return shopBrandsOf(function (r) { return r.type === 'icta' && /ICTA/.test(r.name); }); }
+
+/* ce qu'il faut pour l'installation : une ligne par article, avec sa quantité et ce qu'elle demande */
+function shopNeeds(model, lengths) {
+  var out = [], idx = {};
+  var add = function (sec, key, label, kind, want, qty, note) {
+    if (idx[key]) { idx[key].qty += qty; return idx[key]; }
+    var o = { sec: sec, key: key, label: label, kind: kind, want: want || {}, qty: qty, note: note || '' };
+    idx[key] = o; out.push(o); return o;
+  };
+  if (!model || !model.circuits.length) return out;
+  // tableau : comme sur le plan du tableau (un disjoncteur par circuit, un 2 A pour les commandes)
+  model.ids.forEach(function (id) {
+    if (!id.circuits.length) return;
+    add('tab', 'id-' + id.cal + '-' + id.type, 'Interrupteur différentiel ' + id.cal + ' A 30 mA type ' + id.type, 'id', { cal: id.cal, typ: id.type }, 1);
+  });
+  var cals = {};
+  model.circuits.forEach(function (c) {
+    cals[c.prot.cal] = (cals[c.prot.cal] || 0) + 1;
+    if (c.qc) cals[2] = (cals[2] || 0) + 1;
+  });
+  Object.keys(cals).map(Number).sort(function (a, b) { return a - b; }).forEach(function (cal) {
+    add('tab', 'dj-' + cal, 'Disjoncteur 1P+N ' + cal + ' A courbe C', 'dj', { cal: cal }, cals[cal]);
+  });
+  model.circuits.forEach(function (c) {
+    if (c.type === 'tl') add('tab', 'tl', 'Télérupteur 16 A, 1 contact, bobine 230 V', 'tl', {}, 1);
+    if (c.type === 'mn') add('tab', 'mn', 'Minuterie modulaire', 'mn', {}, 1);
+    if (c.type === 'ex') {
+      if (c.exCde === 'hor') add('tab', 'hz', 'Interrupteur horaire (horloge) modulaire', 'hz', {}, 1);
+      else add('tab', 'cr', 'Interrupteur crépusculaire, avec sa cellule', 'cr', {}, 1, 'Vérifie que la cellule est fournie avec l’interrupteur ; sinon, prends-la à part (même marque).');
+    }
+    if (c.type === 'hc') {
+      add('tab', 'km-' + c.prot.cal, 'Contacteur heures creuses 2 pôles, ' + c.prot.cal + ' A au moins', 'km', { cal: c.prot.cal }, 1);
+      if (c.cmd === 'inter') add('tab', 'is', 'Interrupteur modulaire (pour simuler le signal heures creuses)', 'is', {}, 1);
+    }
+    if (c.type === 'ch' && c.fp) add('tab', 'fpm', 'Programmateur fil pilote modulaire', 'fpm', {}, 1);
+    if (c.type === 'so') { add('tab', 'trs', 'Transformateur de sonnerie 230 V / 8-12 V', 'trs', {}, 1); add('tab', 'son', 'Sonnerie modulaire 8/12 V', 'son', {}, 1); }
+  });
+  var nId = model.ids.filter(function (id) { return id.circuits.length; }).length;
+  add('tab', 'peigne', 'Peigne d’alimentation phase + neutre (un par rangée)', 'peigne', { part: 'pn' }, nId);
+  add('tab', 'coffret', 'Coffret (tableau)', null, {}, 1);
+  add('tab', 'terre', 'Bornier (barrette) de terre', null, {}, 1);
+  // boîtes de dérivation et bornes
+  var L = buildLists(model), maxB = 0;
+  Object.keys(L.boxMat).forEach(function (b) { var n = 0; Object.keys(L.boxMat[b]).forEach(function (k) { n += L.boxMat[b][k]; }); maxB = Math.max(maxB, n); });
+  if (model.usedBoxes.length) add('box', 'bdd', 'Boîte de dérivation', 'bdd', { n: maxB }, model.usedBoxes.length,
+                                 'Prends-la assez grande pour loger ' + (maxB > 1 ? 'tes ' + maxB + ' bornes' : 'ta borne') + ' et toutes les entrées de gaines sans tasser les fils.');
+  Object.keys(L.mat.boite).sort().forEach(function (k) {
+    var ref = k.replace(/^Wago /, ''), n = shopWagoN(ref, '');
+    add('box', 'w-' + ref, 'Borne de connexion ' + n + ' entrées' + (/^221-6/.test(ref) ? ' (6 mm²)' : ''), 'wago', { ref: ref, n: n, big: /^221-6/.test(ref) }, L.mat.boite[k]);
+  });
+  // appareillage : un article par sorte d'appareil
+  var wall = {}, nWall = 0, lamps = 0, eqp = { motor: 0, fan: 0, rad: 0, heater: 0 };
+  var addWall = function (dv) {
+    var t = SHOP_WALL[dv.kind]; if (!t) return;
+    var key = t, want = { type: t }, label = SHOP_WALL_NAME[t];
+    if (dv.kind === 'swl') { key = 'voyant-l'; want.lum = 1; label = 'Interrupteur à voyant lumineux'; }
+    if (dv.kind === 'swt') { key = 'voyant-t'; want.tem = 1; label = 'Interrupteur à voyant témoin'; }
+    if (dv.kind === 'dim' || dv.kind === 'det') {
+      var f3 = dv.cde === 'var3' || dv.cde === 'det3' || (dv.wires && dv.wires.some(function (w) { return w.c === 'B'; }));
+      key = t + (f3 ? '3' : '2'); want.fils = f3 ? 3 : 2; label = SHOP_WALL_NAME[t] + (f3 ? ' 3 fils (avec neutre)' : ' 2 fils (sans neutre)');
+    }
+    if (dv.kind === 'plate') { key = 'sdc32'; want.a32 = 1; label = 'Sortie de câble 32 A (plaque de cuisson)'; }
+    if (dv.kind === 'heater' || dv.kind === 'rad') { key = 'sdc'; label = 'Sortie de câble (radiateur, chauffe-eau)'; }
+    wall[key] = wall[key] || { label: label, want: want, n: 0 }; wall[key].n++; nWall++;
+  };
+  model.circuits.forEach(function (c) {
+    c.devices.forEach(function (dv) {
+      if (dv.kind === 'lamp') lamps++;
+      if (eqp[dv.kind] !== undefined) eqp[dv.kind]++;
+      addWall(dv);
+    });
+    if (c.cmdSub) c.cmdSub.devices.forEach(addWall);
+    else if (c.cmdWires && c.cmd === 'mur') addWall({ kind: 'sw1' });
+  });
+  Object.keys(wall).forEach(function (k) { add('mur', 'm-' + k, wall[k].label, 'wall', wall[k].want, wall[k].n); });
+  if (nWall) add('mur', 'plaques', 'Plaques de finition', null, {}, nWall);
+  // boîtes d'encastrement et DCL
+  if (nWall) add('enc', 'enc', 'Boîte d’encastrement 1 poste', 'bat', {}, nWall, 'Pour des appareils côte à côte, prends plutôt des boîtes 2 ou 3 postes.');
+  if (lamps) {
+    add('enc', 'dcl-boite', 'Boîte DCL de point de centre', 'dclbox', {}, lamps, 'Pour une applique au mur, prends une boîte DCL pour applique.');
+    add('enc', 'dcl-fiche', 'Douille DCL (avec sa fiche)', 'dclfiche', {}, lamps, 'Elle sert d’éclairage provisoire en attendant le luminaire.');
+  }
+  // fils et gaines (métrage de l'onglet Fils et longueurs, marge comprise)
+  var Lg = computeLengths(model, lengths);
+  Lg.rows.forEach(function (r) {
+    if (!r.m) return;
+    var sn = Number(String(r.sec).replace(',', '.'));
+    add('fil', 'fil-' + r.sec + '-' + r.c, 'Fil ' + (sn >= 6 ? 'H07V-R' : 'H07V-U') + ' ' + String(r.sec).replace('.', ',') + ' mm² ' + SHOP_COL[r.c], 'fil', { sec: r.sec, col: r.c, m: r.m }, 1,
+        sn >= 10 ? 'Pour relier le différentiel au peigne (ponts du tableau).' : '');
+  });
+  Lg.gaines.forEach(function (g) { if (g.m) add('fil', 'gaine-' + g.d, 'Gaine ICTA Ø' + g.d, 'gaine', { d: Number(g.d), m: g.m }, 1); });
+  // appareils (à choisir avec le client)
+  if (eqp.motor) add('eqp', 'mvr', 'Moteur de volet roulant filaire', 'eqp', { type: 'mvr' }, eqp.motor);
+  if (eqp.fan) add('eqp', 'vmc', 'Groupe VMC', 'eqp', { type: 'vmc' }, eqp.fan);
+  if (eqp.rad) add('eqp', 'rad', 'Radiateur à fil pilote', 'eqp', { type: 'rad' }, eqp.rad);
+  if (eqp.heater) add('eqp', 'ce', 'Chauffe-eau électrique', 'eqp', { type: 'ce' }, eqp.heater);
+  add('eqp', 'daaf', 'Détecteur de fumée (DAAF)', 'eqp', { type: 'daaf' }, 1, 'Obligatoire dans chaque logement : au moins un détecteur de fumée conforme à la norme NF EN 14604.');
+  return out;
+}
+
+/* références compatibles pour un article, la meilleure en premier (s = note : plus c'est bas, mieux c'est ; why = pourquoi elle convient quand même) */
+function shopCandidates(need, ch, ctx) {
+  ch = ch || shopDefaults(); ctx = ctx || {};
+  var R = shopRefs(), w = need.want || {}, list = [], fam = ctx.fam || '';
+  var push = function (r, s, why) { list.push({ r: r, s: s, why: why || '' }); };
+  var famPen = function (r, p) { return fam && shopFam(r) !== fam ? p : 0; };
+  // marque des boîtes : celle choisie, sinon de préférence celle de l'appareillage ou du tableau
+  var boxPen = function (r, chosen) { return chosen ? (r.brand !== chosen ? 20 : 0) : (r.brand === (ch.mur || '').split('|')[0] || r.brand === ch.tab ? 0 : 1); };
+  var k = need.kind;
+  if (k === 'dj') {
+    if (!ch.tab) return list;
+    var main = ch.gamme || shopTabRanges(ch.tab)[0] || '';
+    R.forEach(function (r) {
+      if (r.type !== 'dj' || r.brand !== ch.tab || shopPoles(r) !== '1P+N' || shopCal(r) !== w.cal || /combin/i.test(r.name)) return;
+      var cv = shopCurve(r); if (cv && cv !== 'C') return;
+      var tm = shopTerm(r);
+      if (ch.term === 'vis' && (tm === 'auto' || tm === 'emb')) return;
+      if (ch.term === 'auto' && tm === 'vis') return;
+      var s = 0, why = '';
+      if (ch.gamme && r.range !== ch.gamme) { s += 100; why = 'autre gamme'; }
+      else if (!ch.gamme && main && r.range !== main) s += 10;
+      if (!cv) s += 5;
+      push(r, s, why);
+    });
+  } else if (k === 'id') {
+    if (!ch.tab) return list;
+    var ok = SHOP_ID_OK[w.typ] || [w.typ];
+    R.forEach(function (r) {
+      if (r.type !== 'id' || r.brand !== ch.tab) return;
+      var p = shopPoles(r); if (p && p !== '2P' && p !== '1P+N') return;
+      var t = shopTxt(r); if (!/30\s?mA/i.test(t) || /400\s?V|415\s?V/.test(t)) return;
+      var cal = shopCal(r); if (!cal || cal < w.cal) return;
+      var ty = shopIdType(r), i = ok.indexOf(ty); if (i < 0) return;
+      var s = i * 10 + (cal > w.cal ? 4 : 0) + famPen(r, 30) + (/tête de groupe/i.test(r.name) ? 1 : 0);
+      push(r, s, fam && shopFam(r) !== fam ? 'autre gamme que tes disjoncteurs' : (i > 0 ? 'type ' + ty + ' : convient aussi' : (cal > w.cal ? cal + ' A : convient aussi' : '')));
+    });
+  } else if (k === 'peigne') {
+    if (!ch.tab) return list;
+    R.forEach(function (r) {
+      if (r.type !== 'peigne' || r.brand !== ch.tab) return;
+      var t = shopTxt(r);
+      if (/vertical|tri|3\s?P|4\s?P|t[ée]trapolaire|module de raccordement|bornier|\b1 pôle/i.test(t)) return;
+      if (shopPeignePart(r) !== w.part) return;
+      if (fam && shopFam(r) !== fam) return;   // le peigne d'une autre gamme ne tombe pas forcément sur les bornes
+      push(r, /\b13 modules/.test(t) ? 0 : 1);
+    });
+  } else if (k === 'tl') {
+    if (!ch.tab) return list;
+    R.forEach(function (r) {
+      if (r.type !== 'tl' || r.brand !== ch.tab) return;
+      var t = shopTxt(r);
+      if (/\b[234]\s?(F|NO)\b|[234] contacts|bipolaire|tripolaire|t[ée]trapolaire|inverseur|\bNF\b|\dO\s?\+|centralis|ordre maintenu|signal|combin|minuterie|\b(12|24|48)\s?V\b|\b32 A/i.test(t)) return;
+      push(r, famPen(r, 5) + (/silencieux/i.test(t) ? 2 : 0) + (/temporis/i.test(t) ? 3 : 0));
+    });
+  } else if (k === 'km') {
+    if (!ch.tab) return list;
+    R.forEach(function (r) {
+      if (r.type !== 'km' || r.brand !== ch.tab) return;
+      var t = shopTxt(r);
+      if (/\bNF\b|\b2\s?O\b|tri|t[ée]tra|\b[34]\s?F\b|\b[34]\s?P\b/i.test(t)) return;
+      var cal = shopCal(r); if (cal && cal < w.cal) return;
+      push(r, famPen(r, 5) + (cal ? 0 : 3) + (/silencieux/i.test(t) ? 1 : 0));
+    });
+  } else if (['mn', 'hz', 'cr', 'fpm', 'trs', 'son', 'is'].indexOf(k) >= 0) {
+    if (!ch.tab) return list;
+    R.forEach(function (r) {
+      if (r.type !== k || r.brand !== ch.tab) return;
+      var t = shopTxt(r), s = famPen(r, 3);
+      if (k === 'hz') { if (/12 à 24 V|\b24 V\b|sans mémoire/i.test(t)) return; s += (/\b[234] (voies|canaux|sorties|inverseurs)/i.test(t) ? 3 : 0) + (/annuel|astro/i.test(t) ? 2 : 0); }
+      if (k === 'cr') { if (/^cellule/i.test(r.name) || /12 à 24 V|\b24 V\b/i.test(t)) return; s += /cellule fournie|avec cellule|cellule (murale|saillie|extérieure|tableau)/i.test(t) ? 0 : 2; }
+      if (k === 'fpm' && /coupure/i.test(t)) return;
+      if (k === 'son') { if (/230 V/.test(t)) return; }
+      if (k === 'trs') s += /16 VA/.test(t) ? 1 : 0;
+      if (k === 'mn') s += /multifonction/i.test(t) ? 1 : 0;
+      if (k === 'is') { if (/tri|t[ée]tra|\b[34]\s?P\b|400 V|415 V/i.test(t)) return; s += (/commande/i.test(t) ? 0 : 1) + (shopCal(r) > 32 ? 2 : 0); }
+      push(r, s);
+    });
+  } else if (k === 'bdd') {
+    var target = w.n <= 4 ? 80 : (w.n <= 8 ? 105 : (w.n <= 14 ? 150 : 180));
+    R.forEach(function (r) {
+      if (r.type !== 'bdd') return;
+      var t = shopTxt(r), m = /(\d+)\s?×/.exec(r.name) || /Ø\s?(\d+)/.exec(r.name), dim = m ? Number(m[1]) : target;
+      var s = boxPen(r, ch.bddBrand) * (ch.bddBrand ? 1 : 0.5) + Math.abs(dim - target) / 25 + (/rouge/i.test(t) ? 6 : 0) + (/faible encombrement/i.test(t) ? 3 : 0);
+      push(r, Math.round(s * 10) / 10);
+    });
+  } else if (k === 'wago') {
+    var want = (SHOP_WAGO[ch.wago] || {})[w.ref] || w.ref;
+    R.forEach(function (r) {
+      if (!/^w2/.test(r.type) || /inline|passage \(1|1 entrée/i.test(r.name)) return;
+      if (shopWagoN(r.ref, r.name) !== w.n) return;
+      if (w.big ? !/^221-6/.test(r.ref) : /^221-6/.test(r.ref)) return;
+      push(r, r.ref === want ? 0 : (r.ref.indexOf(ch.wago + '-') === 0 ? 2 : 5), r.ref.indexOf(ch.wago + '-') === 0 ? '' : 'autre série WAGO');
+    });
+  } else if (k === 'wall') {
+    if (!ch.mur) return list;
+    R.forEach(function (r) {
+      if (r.type !== w.type || shopBrandKey(r) !== ch.mur) return;
+      var t = shopTxt(r);
+      if (w.type === 'pc' && (/griffe/i.test(t) || /\b(20|32) A\b|sans terre|2P(?!\s?\+\s?T)\b/i.test(t))) return;   // prise : fixation par vis (griffes interdites)
+      if (w.a32 && !/32\s?A/i.test(t)) return;
+      if (w.type === 'sdc' && !w.a32 && /32\s?A/i.test(t) && !/16|20/.test(t)) return;
+      var nf = /(\d)\s?fils/i.exec(t), both = /2\s?(ou|\/|et)\s?3\s?fils/i.test(t);
+      if (w.fils && !both && nf && Number(nf[1]) !== w.fils) return;
+      var s = shopColorScore(r, ch.color) * 10;
+      if (w.fils && !both && !nf) s += 3;
+      if (w.lum && !/lumineu/i.test(t)) s += 4;
+      if (w.tem && !/t[ée]moin/i.test(t)) s += 4;
+      if (w.type !== 'dvv' && /double|triple/i.test(r.name)) s += 5;
+      if (/rénovation|easyréno|faible profondeur/i.test(t)) s += 3;
+      if (/à tirage/i.test(t)) s += 5;
+      if (/antimicrobien|granit|arrachement renforcée|sans enjoliveur/i.test(t)) s += 1;
+      if (w.type === 'bp' && !w.lum && /lumineu|voyant/i.test(t)) s += 2;
+      if (w.type === 'bp' && /inverseur|NO\s?\+\s?NF|NO\/NF/i.test(t)) s += 2;
+      if (w.type === 'pc' && /USB|étanche|saillie|IP\s?[45]\d|à puits|horizontale|plinthe/i.test(t)) s += 5;
+      if (/griffe/i.test(t)) s += 4;
+      if (/lot|pack|kit/i.test(t)) s += 6;
+      push(r, s);
+    });
+  } else if (k === 'bat') {
+    var sup = ch.support === 'cloison' ? /cloison|placo|multimat/i : (ch.support === 'air' ? /étanche à l.air|air.?métic/i : /sceller|maçonnerie|multimat/i);
+    R.forEach(function (r) {
+      if (r.type !== 'bat') return;
+      var t = shopTxt(r);
+      if (!/simple|1 poste/i.test(t) || /double|triple|quadruple|lot|grand format|dérivation|point de centre|luminaire/i.test(t)) return;
+      if (!sup.test(t + ' ' + (r.range || ''))) return;
+      push(r, boxPen(r, ch.boxBrand) + (/prof\.?\s?40/.test(t) ? 0 : 1) + (/domotique|Ø85|30 mm/.test(t) ? 2 : 0));
+    });
+  } else if (k === 'dclbox') {
+    R.forEach(function (r) {
+      if (r.type !== 'dcl' || !/bo[iî]te|kit|point de centre/i.test(r.name) || /applique|saillie|^couvercle|^fiche|^douille/i.test(r.name)) return;
+      var t = shopTxt(r) + ' ' + (r.range || ''), cl = /cloison|placo|plafond creux/i.test(t), air = /étanche à l.air|air.?métic|stopair/i.test(t);
+      var s = (ch.support === 'cloison' ? (cl ? 0 : 3) : (ch.support === 'air' ? (air ? 0 : 3) : (/maçonnerie|multimat/i.test(t) ? 0 : (cl ? 3 : 1))))
+            + boxPen(r, ch.boxBrand) + (/douille|kit/i.test(t) ? 1 : 0);
+      push(r, s);
+    });
+  } else if (k === 'dclfiche') {
+    R.forEach(function (r) { if (r.type === 'dcl' && /^(fiche|douille)/i.test(r.name)) push(r, /^douille/i.test(r.name) ? 0 : 1, /^fiche/i.test(r.name) ? 'fiche seule, pour brancher un luminaire' : ''); });
+  } else if (k === 'fil') {
+    var col = SHOP_COL[w.col], sec = String(w.sec).replace('.', ',');
+    R.forEach(function (r) {
+      if (r.type !== 'icta' || !/H07V-[UR]/.test(r.name)) return;
+      if (r.name.indexOf(' ' + sec + ' mm²') < 0 || r.name.indexOf(col) < 0) return;
+      var len = shopLen(r); if (!len) return;
+      push(r, len >= Math.min(100, w.m) ? 0 : 2);
+    });
+  } else if (k === 'gaine') {
+    R.forEach(function (r) {
+      if (r.type !== 'icta' || !/ICTA/.test(r.name) || !new RegExp('Ø' + w.d + '\\b').test(r.name)) return;
+      var len = shopLen(r); if (!len || len > 150) return;
+      var t = shopTxt(r);
+      push(r, (ch.gaineBrand && r.brand !== ch.gaineBrand ? 20 : 0) + (/VDI|verte/i.test(t) ? 6 : (/grise/i.test(t) ? 0 : 2)) + (/avec (tire-fil|fil tire)/i.test(r.name) ? 0 : 1));
+    });
+  } else if (k === 'eqp') {
+    R.forEach(function (r) { if (r.type === w.type) push(r, 0); });
+  }
+  list.sort(function (a, b) { return a.s - b.s || (a.r.brand < b.r.brand ? -1 : a.r.brand > b.r.brand ? 1 : 0) || (a.r.ref < b.r.ref ? -1 : 1); });
+  return list;
+}
+// quantité : des pièces, ou des mètres pour les fils et les gaines (vendus en couronnes ou au mètre)
+function shopQty(need) { return need.kind === 'fil' || need.kind === 'gaine' ? need.want.m : need.qty; }
+// conseil d'achat pour un métrage, comme dans « Fils et longueurs »
+function shopBuy(m) { return typeof rollsFor === 'function' ? rollsFor(m) : ''; }
+// le choix de l'utilisateur s'il est toujours compatible, sinon la première référence (rien par défaut pour les appareils)
+function shopPick(need, cands, ch) {
+  var p = ch && ch.picks ? ch.picks[need.key] : '';
+  if (p === '-') return null;
+  if (p) { var f = cands.filter(function (c) { return c.r.brand + '|' + c.r.ref === p; })[0]; if (f) return f; }
+  if (need.kind === 'eqp') return null;
+  return cands[0] || null;
+}
+// premier choix quand on demande « choisis pour moi » : la marque de tableau et la gamme d'appareillage les plus fournies de la base
+function shopAuto(ch) {
+  ch = shopClean(ch);
+  var brands = shopTabBrands(), walls = shopWallRanges();
+  if (!ch.tab || brands.indexOf(ch.tab) < 0) ch.tab = brands[0] || '';
+  if (!ch.mur || walls.indexOf(ch.mur) < 0) ch.mur = walls[0] || '';
+  if (ch.gamme && shopTabRanges(ch.tab).indexOf(ch.gamme) < 0) ch.gamme = '';
+  return ch;
+}
+
+/* la liste complète : articles, références choisies, coffret et contrôles de compatibilité */
+function shopPlan(model, lengths, chIn) {
+  var ch = shopClean(chIn), needs = shopNeeds(model, lengths), items = [], ctx = { fam: '' };
+  if (ch.tab && shopTabBrands().indexOf(ch.tab) < 0) ch.tab = '';
+  if (ch.mur && shopWallRanges().indexOf(ch.mur) < 0) ch.mur = '';
+  var mk = function (n) {
+    var cands = n.kind ? shopCandidates(n, ch, ctx) : [], pick = n.kind ? shopPick(n, cands, ch) : null;
+    var it = { need: n, key: n.key, sec: n.sec, label: n.label, kind: n.kind, cands: cands, pick: pick, qty: shopQty(n), note: n.note, warn: '', skip: false };
+    if ((n.kind === 'fil' || n.kind === 'gaine') && pick && shopLen(pick.r) >= 2 * n.want.m)
+      it.note = (it.note ? it.note + ' ' : '') + 'Cette référence est une couronne de ' + shopLen(pick.r) + ' m : il existe aussi des couronnes plus courtes' + (n.kind === 'fil' ? ', ou du fil au mètre.' : '.');
+    return it;
+  };
+  // les disjoncteurs d'abord : leur gamme décide du peigne et des différentiels
+  var byKey = {}, fams = {};
+  needs.forEach(function (n) { if (n.kind === 'dj') { var it = mk(n); byKey[n.key] = it; if (it.pick) { var f = shopFam(it.pick.r); fams[f] = (fams[f] || 0) + n.qty; } } });
+  ctx.fam = Object.keys(fams).sort(function (a, b) { return fams[b] - fams[a]; })[0] || '';
+  needs.forEach(function (n) {
+    var it = byKey[n.key] || mk(n);
+    // marque sans peigne phase + neutre : une barre de phase et une barre de neutre par rangée
+    if (n.kind === 'peigne' && !it.cands.length && ch.tab) {
+      var np = { sec: n.sec, key: 'peigne-p', label: 'Barre de pontage phase (une par rangée)', kind: 'peigne', want: { part: 'p' }, qty: n.qty, note: '' };
+      var nn = { sec: n.sec, key: 'peigne-n', label: 'Barre de pontage neutre (une par rangée)', kind: 'peigne', want: { part: 'n' }, qty: n.qty, note: '' };
+      var ip = mk(np), inn = mk(nn);
+      if (ip.cands.length && inn.cands.length) { items.push(ip, inn); return; }
+    }
+    items.push(it);
+  });
+  // ce qui manque, ce qui est déjà fourni
+  var get = function (key) { return items.filter(function (x) { return x.key === key; })[0]; };
+  items.forEach(function (it) {
+    if (!it.kind || it.pick || it.kind === 'eqp') return;
+    if (ch.picks[it.key] === '-' && it.cands.length) { it.warn = ''; return; }
+    if (it.sec === 'tab' && !ch.tab) it.warn = SHOP_ASK.tab;
+    else if (it.kind === 'wall' && !ch.mur) it.warn = SHOP_ASK.mur;
+    else if (it.sec === 'tab') it.warn = 'Pas de référence ' + ch.tab + ' pour cet article dans la base d’ElectroPlan : demande au vendeur la même marque que ton tableau.';
+    else if (it.kind === 'wall') it.warn = 'Pas de « ' + it.label.toLowerCase() + ' » dans la gamme ' + ch.mur.replace('|', ' ') + ' dans la base d’ElectroPlan : demande-le au vendeur, ou change de gamme.';
+    else it.warn = 'Pas de référence dans la base d’ElectroPlan pour cet article : demande au vendeur.';
+  });
+  var box = get('dcl-boite'), fiche = get('dcl-fiche');
+  if (box && fiche && box.pick && /douille/i.test(shopTxt(box.pick.r))) { fiche.skip = true; fiche.note = 'Déjà fournie avec la boîte DCL choisie : rien à acheter en plus.'; }
+  var pl = get('plaques');
+  if (pl) {
+    var full = 0, nw = 0;
+    items.forEach(function (x) { if (x.kind === 'wall') { nw += x.qty; if (x.pick && /complet|ensemble|avec plaque/i.test(shopTxt(x.pick.r))) full += x.qty; } });
+    pl.qty = Math.max(0, nw - full);
+    pl.label = 'Plaques de finition' + (ch.mur ? ' ' + ch.mur.split('|')[1] : '');
+    pl.note = 'Une par appareil (ou une plaque multipostes pour des appareils côte à côte), dans la même gamme et la même couleur que les mécanismes.' + (full ? ' ' + full + ' appareil' + (full > 1 ? 's sont vendus complets' : ' est vendu complet') + ' avec sa plaque : pas compté' + (full > 1 ? 's' : '') + '.' : '');
+    if (!pl.qty) pl.skip = true;
+  }
+  // coffret : modules réellement occupés par les appareils choisis, plus 20 % de réserve
+  var used = 0;
+  items.forEach(function (x) { if (x.sec === 'tab' && SHOP_MODS[x.kind]) used += x.qty * (x.pick ? shopMods(x.pick.r, x.kind) : SHOP_MODS[x.kind]); });
+  var total = Math.ceil(used / 0.8), rows = Math.max(1, Math.ceil(total / SHOP_ROW));
+  var cf = get('coffret');
+  if (cf) {
+    cf.label = 'Coffret de ' + total + ' modules au moins (' + rows + ' rangée' + (rows > 1 ? 's' : '') + ' de ' + SHOP_ROW + ')' + (ch.tab ? ', marque ' + ch.tab : '');
+    cf.note = 'Tes appareils occupent environ ' + used + ' modules. La norme demande 20 % de place libre en logement individuel (6 modules au moins en logement collectif), et aucune rangée vide.';
+  }
+  // contrôles de compatibilité
+  var checks = [], tabItems = items.filter(function (x) { return x.sec === 'tab' && x.pick; });
+  if (ch.tab) {
+    var other = tabItems.filter(function (x) { return x.pick.r.brand !== ch.tab; });
+    checks.push(other.length ? { ok: false, t: 'Une partie du tableau n’est pas de la marque ' + ch.tab + ' : vérifie que tout se monte dans le même coffret.' }
+                             : { ok: true, t: 'Tout le tableau est de la marque ' + ch.tab + '.' });
+    var fset = {};
+    tabItems.forEach(function (x) { if (['dj', 'id', 'peigne'].indexOf(x.kind) >= 0) fset[shopFam(x.pick.r) || ch.tab] = 1; });
+    var fl = Object.keys(fset);
+    if (fl.length > 1) checks.push({ ok: false, t: 'Disjoncteurs, différentiels et peigne viennent de plusieurs gammes (' + fl.join(', ') + ') : vérifie dans le catalogue du fabricant que le peigne va sur tous.' });
+    else if (fl.length) checks.push({ ok: true, t: 'Disjoncteurs, différentiels et peigne de la même ' + (ctx.fam ? 'gamme (' + ch.tab + ' ' + ctx.fam + ')' : 'marque (' + ch.tab + ')') + '.' });
+    if (!items.some(function (x) { return x.kind === 'peigne' && x.pick; }) && items.some(function (x) { return x.kind === 'peigne'; }))
+      checks.push({ ok: false, t: 'Pas de peigne ' + ch.tab + (ctx.fam ? ' ' + ctx.fam : '') + ' dans la base : demande au vendeur celui qui va avec tes disjoncteurs.' });
+    var terms = {};
+    tabItems.forEach(function (x) { if (x.kind === 'dj') terms[shopTerm(x.pick.r) || '?'] = 1; });
+    if (terms.emb) checks.push({ ok: 'info', t: 'Appareils embrochables : ils se montent sur le répartiteur de leur gamme. Garde tout le tableau dans cette gamme.' });
+    if ((terms.vis || terms.mixte) && (terms.auto || terms.mixte) && !terms.emb) checks.push({ ok: 'info', t: 'Il y a des bornes à vis et des bornes automatiques : respecte la longueur de dénudage de chaque appareil (voir sa notice).' });
+    checks.push({ ok: 'info', t: 'Avant d’acheter, regarde dans le catalogue de la marque que le peigne va sur tes disjoncteurs et comment le différentiel de tête de rangée l’alimente (sortie en haut ou en bas, module de raccordement).' });
+  }
+  if (cf) checks.push({ ok: true, t: 'Coffret : environ ' + used + ' modules occupés, donc ' + total + ' modules au moins avec la réserve de 20 %.' });
+  var wallItems = items.filter(function (x) { return x.kind === 'wall'; });
+  if (wallItems.length && ch.mur) {
+    var miss = wallItems.filter(function (x) { return !x.pick && ch.picks[x.key] !== '-'; });
+    checks.push(miss.length ? { ok: false, t: 'Il manque ' + miss.length + ' article' + (miss.length > 1 ? 's' : '') + ' dans la gamme ' + ch.mur.replace('|', ' ') + ' : ' + miss.map(function (x) { return x.label.toLowerCase(); }).join(', ') + '.' }
+                            : { ok: true, t: 'Interrupteurs, prises et plaques de la même gamme (' + ch.mur.replace('|', ' ') + ') : ils vont ensemble.' });
+    if (wallItems.some(function (x) { return x.need.want.type === 'pc'; })) checks.push({ ok: true, t: 'Prises fixées par vis dans la boîte d’encastrement : les modèles à griffes sont écartés (interdits pour les prises).' });
+  }
+  if (items.some(function (x) { return x.kind === 'wago'; })) {
+    checks.push(ch.wago === '221' ? { ok: true, t: 'Bornes WAGO 221 : elles prennent les fils rigides et souples.' }
+                                  : { ok: 'info', t: 'Bornes WAGO ' + ch.wago + ' : fils rigides' + (ch.wago === '2773' ? ' ou semi-rigides' : '') + ' seulement (pas de fil souple). Les fils H07V-U de la liste sont rigides.' });
+    if (items.some(function (x) { return x.kind === 'wago' && x.need.want.n === 8; }) && ch.wago === '221') checks.push({ ok: 'info', t: 'Pour plus de 5 fils sur une borne, la liste prend une WAGO à 8 entrées : elle ne prend que du fil rigide.' });
+  }
+  if (items.some(function (x) { return x.kind === 'dclbox'; })) checks.push({ ok: true, t: 'Points lumineux avec boîte DCL, comme le demande la norme.' });
+  if (items.some(function (x) { return x.kind === 'fil'; })) checks.push({ ok: true, t: 'Fils aux couleurs de la norme : bleu pour le neutre, vert/jaune pour la terre.' });
+  return { ch: ch, items: items, fam: ctx.fam, used: used, total: total, rows: rows, checks: checks, asked: !!(ch.tab && ch.mur) };
+}
+if (typeof module !== 'undefined') module.exports = { shopNeeds: shopNeeds, shopCandidates: shopCandidates, shopPick: shopPick, shopQty: shopQty, shopAuto: shopAuto, shopPlan: shopPlan, shopClean: shopClean };
+</script>
+<script>
 (function () {
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
   var DRAFT_KEY = 'cabloplan:draft', SAVED_KEY = 'cabloplan:saved', STEPS_KEY = 'cabloplan:steps:';
-  var UI_KEY = 'cabloplan:ui', PANEL_KEY = 'cabloplan:panel', SIDEW_KEY = 'cabloplan:sidew', ZHINT_KEY = 'cabloplan:zhint', FOCUS_KEY = 'cabloplan:focushint';
+  var UI_KEY = 'cabloplan:ui', PANEL_KEY = 'cabloplan:panel', SIDEW_KEY = 'cabloplan:sidew', ZHINT_KEY = 'cabloplan:zhint', FOCUS_KEY = 'cabloplan:focushint', MAT_KEY = 'cabloplan:mat';
   var viewer = $('#viewer'), lists = $('#lists'), root = document.documentElement;
   var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -6821,7 +7412,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
                     tabSide: SIDES.indexOf(o.tabSide) >= 0 ? o.tabSide : 'right', gaines: o.gaines === 'circuit' ? 'circuit' : 'groupe' };
     var boxes = normBoxes(p.boxes);
     var out = { name: String(p.name || 'Mon installation').slice(0, 80), options: options, boxes: boxes,
-                lengths: normLengths(p.lengths, options.idMode === 'single'), circuits: [] };
+                lengths: normLengths(p.lengths, options.idMode === 'single'), shop: shopClean(p.shop), circuits: [] };
     (p.circuits || []).slice(0, 60).forEach(function (c) {
       if (!c || !CATALOG[c.type]) return;
       var d = defaultCircuit(c.type);
@@ -6851,7 +7442,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   try { project = normalize(JSON.parse(lsGet(DRAFT_KEY))); } catch (e) { project = null; }
   if (!project) project = normalize(sampleProject());
 
-  var TABS = { box: 'boite', tab: 'tableau', uni: 'unifilaire', list: 'fils', labels: 'etiquettes', steps: 'pas-a-pas', quiz: 'entrainement', parts: 'appareils' };
+  var TABS = { box: 'boite', tab: 'tableau', uni: 'unifilaire', list: 'materiel', labels: 'etiquettes', steps: 'pas-a-pas', quiz: 'entrainement', parts: 'appareils' };
   var TAB_ORDER = ['box', 'tab', 'uni', 'list', 'labels', 'steps', 'quiz', 'parts'];
   var SVG_TABS = { box: 1, tab: 1, uni: 1, labels: 1 };
   /* mode : 'pc' ou 'mobile' (interface) ; view : vue affichée sur téléphone ('edit' = circuits, 'plans', 'list', 'steps', 'quiz') */
@@ -6859,8 +7450,12 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
              mode: null, pref: 'auto', view: 'plans', plan: 'box', scroll: {}, vscroll: {}, openUid: null, stepOpen: {}, entOpen: {}, boxFocus: null, alertsOpen: undefined, lastWarn: 0 };
   ui.pref = lsGet(UI_KEY) || 'auto';
   if (ui.pref !== 'mobile' && ui.pref !== 'pc') ui.pref = 'auto';
+  // onglet Matériel : la liste de courses ('shop') ou les fils et longueurs ('fils')
+  ui.mat = lsGet(MAT_KEY) === 'fils' ? 'fils' : 'shop';
   var hsh = (location.hash || '').replace('#', ''), hashTab = false;
   Object.keys(TABS).forEach(function (k) { if (TABS[k] === hsh) { ui.tab = k; hashTab = true; } });
+  // anciens liens : #fils ouvre les fils et longueurs
+  if (hsh === 'fils') { ui.tab = 'list'; ui.mat = 'fils'; hashTab = true; }
   function tabView(t) { return SVG_TABS[t] ? 'plans' : t; }
   if (SVG_TABS[ui.tab]) ui.plan = ui.tab;
   ui.view = hsh === 'circuits' ? 'edit' : (hashTab ? tabView(ui.tab) : (project.circuits.length ? 'plans' : 'edit'));
@@ -7045,11 +7640,11 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   function emptyListHtml() { var m = emptyMsg(); return emptyHtml(m[0], m[1], EMPTY_ACTIONS); }
   // les vues en liste (fils, pas à pas, entraînement) partagent un seul conteneur : chacune retrouve sa position de défilement
   function setLists(h) {
-    var same = lists.dataset.tab === ui.tab, top = lists.scrollTop;
+    var key = ui.tab === 'list' ? 'list:' + ui.mat : ui.tab, same = lists.dataset.tab === key, top = lists.scrollTop;
     if (!same && lists.dataset.tab) ui.scroll[lists.dataset.tab] = top;
     lists.innerHTML = h;
-    lists.dataset.tab = ui.tab;
-    lists.scrollTop = same ? top : (ui.scroll[ui.tab] || 0);
+    lists.dataset.tab = key;
+    lists.scrollTop = same ? top : (ui.scroll[key] || 0);
   }
   function renderBoxPick() {
     var bp = $('#boxpick'), ub = model ? model.usedBoxes : [];
@@ -7140,8 +7735,20 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   function renderListView() {
     hideBusy();
     if (!model.circuits.length) { setLists(emptyListHtml()); return; }
+    var h = '<section class="mat-seg"><div class="seg" role="tablist" aria-label="Matériel">' +
+      '<button type="button" role="tab" data-matv="shop" aria-selected="' + (ui.mat === 'shop') + '">' + ic('cart') + 'Liste de courses</button>' +
+      '<button type="button" role="tab" data-matv="fils" aria-selected="' + (ui.mat === 'fils') + '">' + ic('cable') + 'Fils et longueurs</button></div></section>';
+    setLists(h + (ui.mat === 'fils' ? filsHtml() : shopHtml()));
+  }
+  function setMatView(v, focus) {
+    ui.mat = v === 'fils' ? 'fils' : 'shop';
+    lsSet(MAT_KEY, ui.mat);
+    renderListView();
+    if (focus) { var b = lists.querySelector('[data-matv="' + ui.mat + '"]'); if (b) b.focus({ preventScroll: true }); }
+  }
+  function filsHtml() {
     var L = buildLists(model), h = '', multi = model.multiBox, mob = ui.mode === 'mobile';
-    h += '<section>' + ttl('ruler', 'Longueurs à prévoir') + '<p class="note">Mets tes distances : le métrage se met à jour tout seul.</p>' + lengthInputs() + '<div id="lenres">' + lengthResults() + '</div></section>';
+    h += '<section>' + ttl('ruler', 'Longueurs à prévoir') + '<p class="note">Mets tes distances : le métrage se met à jour tout seul, ici et dans la liste de courses.</p>' + lengthInputs() + '<div id="lenres">' + lengthResults() + '</div></section>';
     h += '<section>' + ttl('cable', 'Fils qui partent du tableau') + '<p class="note">Un numéro par fil : repère-le aux deux bouts.</p>';
     if (mob) {
       // téléphone : une carte par fil, avec son repère comme sur le plan
@@ -7200,14 +7807,159 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
     h += '<section>' + ttl('link', 'Ponts dans le tableau') + '<div class="tbl-wrap"><table><thead><tr><th>Liaison</th><th>Fil</th><th>Section</th></tr></thead><tbody>';
     L.ponts.forEach(function (p) { h += '<tr><td>' + esc(p.txt) + '</td><td class="wn">' + swatch(p.c) + esc(WN[p.c]) + '</td><td class="wn">' + secTxt(p.sec) + ' mm²</td></tr>'; });
     h += '</tbody></table></div></section>';
-    var mat = function (title, o) {
-      var ks = Object.keys(o);
-      if (!ks.length) return '';
-      return '<div class="tot"><h3>' + esc(title) + '</h3><ul>' + ks.map(function (k) { return '<li>' + esc(k) + '<em>× ' + o[k] + '</em></li>'; }).join('') + '</ul></div>';
+    h += '<p class="note mat-more">Ce qu’il faut acheter (appareils, boîtes, bornes, couronnes de fil) est dans la <button type="button" class="linkbtn" data-matv="shop">liste de courses</button>.</p>';
+    return h;
+  }
+
+  /* -- liste de courses : une marque par famille de produits, puis les références compatibles pour chaque article */
+  function shopPlanNow() { return shopPlan(model, project.lengths, project.shop); }
+  function shopBrandTxt(r) { return r.brand.replace(' Electric', '') + (r.range ? ' ' + r.range : ''); }
+  function shopIsLen(it) { return it.kind === 'fil' || it.kind === 'gaine'; }
+  function shopQtyTxt(it) { return shopIsLen(it) ? String(it.qty).replace('.', ',') + ' m' : '× ' + it.qty; }
+  function shopChoicesHtml(P) {
+    var ch = P.ch, has = {};
+    P.items.forEach(function (x) { has[x.sec] = 1; has[x.kind] = 1; });
+    var field = function (k, label, opts, cur, need) {
+      return '<label class="shop-f' + (need ? ' need' : '') + '"><span>' + esc(label) + '</span><select data-shop="' + k + '">' + opts.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+      }).join('') + '</select></label>';
     };
-    var boxCards = multi ? Object.keys(L.boxMat).map(function (b) { return mat(b, L.boxMat[b]); }).join('') : mat('Boîte de dérivation', L.mat.boite);
-    h += '<section>' + ttl('wrench', 'Matériel') + '<div class="mat">' + mat('Tableau', L.mat.tableau) + boxCards + mat('Appareils', L.mat.appareils) + '</div></section>';
-    setLists(h);
+    var all = function (list) { return [['', 'Toutes les marques']].concat(list.map(function (b) { return [b, b]; })); };
+    var grp = function (title, icon, inner) { return '<fieldset class="shop-fam"><legend>' + ic(icon) + esc(title) + '</legend>' + inner + '</fieldset>'; };
+    var h = '<div class="shop-grid">';
+    if (has.tab) {
+      var ranges = ch.tab ? shopTabRanges(ch.tab) : [];
+      var f = field('tab', 'Marque', [['', '— choisis la marque —']].concat(shopTabBrands().map(function (b) { return [b, b]; })), ch.tab, !ch.tab);
+      if (ranges.length > 1) f += field('gamme', 'Gamme des disjoncteurs', [['', 'La plus complète (' + ranges[0] + ')']].concat(ranges.map(function (g) { return [g, g]; })), ch.gamme);
+      if (ch.tab) f += field('term', 'Raccordement', [['', 'Peu importe'], ['vis', 'Bornes à vis'], ['auto', 'Bornes automatiques']], ch.term);
+      h += grp('Tableau électrique', 'panel', f);
+    }
+    if (has.mur) {
+      h += grp('Interrupteurs et prises', 'plug', field('mur', 'Gamme', [['', '— choisis la gamme —']].concat(shopWallRanges().map(function (k) { return [k, k.replace('|', ' · ')]; })), ch.mur, !ch.mur) +
+        field('color', 'Couleur', [['blanc', 'Blanc'], ['', 'Peu importe']], ch.color));
+    }
+    if (has.bat || has.dclbox || has.bdd) {
+      var f2 = '';
+      if (has.bat || has.dclbox) f2 += field('support', 'Pose', [['mac', 'Maçonnerie (à sceller)'], ['cloison', 'Cloison sèche (plaque de plâtre)'], ['air', 'Étanche à l’air']], ch.support) +
+                                       field('boxBrand', 'Boîtes d’encastrement et DCL', all(shopBoxBrands()), ch.boxBrand);
+      if (has.bdd) f2 += field('bddBrand', 'Boîte de dérivation', all(shopBddBrands()), ch.bddBrand);
+      h += grp('Boîtes', 'box', f2);
+    }
+    if (has.wago || has.gaine) {
+      var f3 = '';
+      if (has.wago) f3 += field('wago', 'Bornes de connexion', [['221', 'WAGO 221, à levier'], ['2273', 'WAGO 2273, fils rigides'], ['2773', 'WAGO 2773, fils rigides']], ch.wago);
+      if (has.gaine) f3 += field('gaineBrand', 'Gaines ICTA', all(shopGaineBrands()), ch.gaineBrand);
+      h += grp('Bornes et gaines', 'link', f3);
+    }
+    return h + '</div>';
+  }
+  function shopRowHtml(it) {
+    var r = it.pick ? it.pick.r : null, n = it.need, cls = 'shop-row' + (it.skip ? ' skip' : '') + (it.warn ? ' miss' : '') + (!it.kind ? ' plain' : '');
+    var h = '<li class="' + cls + '"><span class="shop-q">' + (it.skip ? '—' : shopQtyTxt(it)) + '</span><div class="shop-m"><b class="shop-l">' + esc(it.label) + '</b>';
+    if (shopIsLen(it)) h += '<span class="shop-len">' + String(n.want.m).replace('.', ',') + ' m à tirer, marge comprise · à acheter : ' + esc(shopBuy(n.want.m)) + '</span>';
+    if (it.cands.length && !it.skip) {
+      h += '<select data-pick="' + esc(it.key) + '" aria-label="Référence pour : ' + esc(it.label) + '"><option value="-"' + (r ? '' : ' selected') + '>' +
+        (it.kind === 'eqp' ? '— à choisir avec le client —' : '— je choisirai en magasin —') + '</option>' +
+        it.cands.slice(0, 60).map(function (c) {
+          return '<option value="' + esc(c.r.brand + '|' + c.r.ref) + '"' + (r && c.r === r ? ' selected' : '') + '>' + esc(c.r.ref + ' · ' + shopBrandTxt(c.r) + ' · ' + c.r.name + (c.why ? ' (' + c.why + ')' : '')) + '</option>';
+        }).join('') + '</select>';
+    }
+    if (r) h += '<div class="shop-sub"><span class="mono">' + esc(r.ref) + '</span><span>' + esc(shopBrandTxt(r)) + '</span>' + (r.specs ? '<span>' + esc(r.specs) + '</span>' : '') +
+                '<button type="button" class="linkbtn" data-shopref="' + esc(r.id) + '">Voir la fiche et le câblage</button></div>';
+    if (it.pick && it.pick.why) h += '<p class="shop-note">' + esc(it.pick.why.charAt(0).toUpperCase() + it.pick.why.slice(1)) + '.</p>';
+    if (it.warn) h += '<p class="shop-warn">' + esc(it.warn) + '</p>';
+    if (it.note) h += '<p class="shop-note">' + esc(it.note) + '</p>';
+    return h + '</div></li>';
+  }
+  var SHOP_FAQ = 'https://www.legrand.fr/questions-frequentes/quelle-est-la-norme-nf-c-15-100-pour-le-tableau-electrique';
+  function shopHtml() {
+    var P = shopPlanNow(), ch = P.ch, h = '', picked = Object.keys(project.shop.picks || {}).length;
+    var inner = '<p class="note">' + (P.asked ? 'Change une marque ou une gamme : la liste reprend des références compatibles entre elles.'
+        : 'Quelle marque veux-tu pour chaque produit ? Commence par la marque du tableau et la gamme des interrupteurs et prises : pour chaque article, la liste prendra une référence compatible, relevée sur le site du fabricant ou d’un distributeur.') + '</p>' +
+      shopChoicesHtml(P) +
+      '<div class="row-actions">' + (P.asked ? '' : '<button type="button" class="primary sm" id="shop-auto">' + ic('sparkles') + 'Choisir pour moi</button>') +
+      (picked ? '<button type="button" class="ghost sm" id="shop-reset">Remettre les références conseillées</button>' : '') + '</div>';
+    if (P.asked) {
+      // marques déjà choisies : un résumé, qu'on ouvre pour les changer
+      var sum = [ch.tab + (P.fam ? ' ' + P.fam : ''), ch.mur.replace('|', ' ')].concat(P.items.some(function (x) { return x.kind === 'wago'; }) ? ['WAGO ' + ch.wago] : []).join(' · ');
+      h += '<section class="shop-ch"><details class="shop-chd"' + (ui.shopOpen ? ' open' : '') + '><summary><span class="shop-cht">' + ttl('cart', 'Tes marques') +
+        '<span class="shop-chs">' + esc(sum) + '</span></span><span class="shop-chm">Changer</span><span class="chev" aria-hidden="true"></span></summary>' + inner + '</details></section>';
+    } else h += '<section class="shop-ch ask">' + ttl('cart', 'Choisis tes marques') + inner + '</section>';
+    SHOP_SECTIONS.forEach(function (sc) {
+      var its = P.items.filter(function (x) { return x.sec === sc[0]; });
+      if (!its.length) return;
+      var sub = sc[0] === 'tab' && ch.tab ? ch.tab + (P.fam ? ' · ' + P.fam : '') : (sc[0] === 'mur' && ch.mur ? ch.mur.replace('|', ' · ') : '');
+      h += '<section class="shop-sec">' + ttl(sc[2], esc(sc[1])) + (sub ? '<p class="note shop-brand">' + esc(sub) + '</p>' : '') +
+        (sc[0] === 'fil' ? '<p class="note">Métrage calculé avec tes distances : <button type="button" class="linkbtn" data-matv="fils">les régler</button>.</p>' : '') +
+        (sc[0] === 'eqp' ? '<p class="note">Ils se choisissent avec le client (puissance, taille, commande) : la liste montre ceux de la base.</p>' : '') +
+        '<ul class="shop-list">' + its.map(shopRowHtml).join('') + '</ul></section>';
+    });
+    h += '<section class="shop-compat">' + ttl('shield', 'Ce qui va ensemble') + '<ul class="checks">' + P.checks.map(function (c) {
+      return '<li class="' + (c.ok === true ? 'ok' : (c.ok === false ? 'ko' : 'inf')) + '">' + esc(c.t) + '</li>';
+    }).join('') + '</ul>' +
+      '<details class="shop-rules"><summary>Les règles à retenir<span class="chev" aria-hidden="true"></span></summary><ul>' +
+      '<li>Peigne, disjoncteurs et différentiels : même marque et même gamme, sinon les dents du peigne peuvent ne pas tomber sur les bornes.</li>' +
+      '<li>Tableau d’un logement individuel : 20 % de place libre pour plus tard (6 modules au moins en logement collectif), et aucune rangée vide. <a href="' + SHOP_FAQ + '" target="_blank" rel="noopener">Source : Legrand</a></li>' +
+      '<li>Différentiel : un type supérieur (A à la place de AC, F à la place de A) ou un calibre plus grand convient aussi.</li>' +
+      '<li>Prises : fixées par vis dans la boîte d’encastrement, jamais par griffes.</li>' +
+      '<li>Mécanismes, enjoliveurs et plaques : de la même gamme, sinon ils ne s’emboîtent pas.</li>' +
+      '<li>WAGO 221 : fils rigides et souples. WAGO 2273 et 2773 : fils rigides (et semi-rigides pour la 2773).</li>' +
+      '<li>Fils : bleu pour le neutre, vert/jaune pour la terre, jamais ces couleurs pour une phase.</li></ul></details></section>';
+    h += '<section class="shop-act">' + ttl('download', 'Emporter la liste') + '<div class="row-actions">' +
+      (downloads ? '<button type="button" id="shop-csv">' + ic('download') + 'Télécharger (tableur CSV)</button>' : '') +
+      '<button type="button" id="shop-copy">' + ic('checks') + 'Copier la liste</button></div>' +
+      '<p class="note">Prix et stock : vois avec ton distributeur. Les références viennent de la base d’ElectroPlan (relevée en ' + esc(APPDB_DATE) + ') ; vérifie toujours la notice avant de câbler.</p></section>';
+    return h;
+  }
+  function shopSecName(sec) { return (SHOP_SECTIONS.filter(function (x) { return x[0] === sec; })[0] || ['', ''])[1]; }
+  function csvQ(v) { v = String(v == null ? '' : v); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function shopCsv() {
+    var P = shopPlanNow(), rows = [['Rubrique', 'Quantité', 'Unité', 'Article', 'Marque', 'Gamme', 'Référence', 'Désignation', 'Source']];
+    P.items.forEach(function (it) {
+      if (it.skip) return;
+      var r = it.pick && it.pick.r;
+      rows.push([shopSecName(it.sec), String(it.qty).replace('.', ','), shopIsLen(it) ? 'm' : 'pièce', it.label + (shopIsLen(it) ? ' (à acheter : ' + shopBuy(it.qty) + ')' : ''),
+                 r ? r.brand : '', r ? r.range : '', r ? r.ref : '', r ? r.name : (it.kind ? 'à choisir' : ''), r ? r.url : '']);
+    });
+    return '﻿' + rows.map(function (r) { return r.map(csvQ).join(';'); }).join('\r\n');
+  }
+  function shopText() {
+    var P = shopPlanNow(), out = ['Liste de courses · ' + project.name + ' (ElectroPlan)'];
+    SHOP_SECTIONS.forEach(function (sc) {
+      var its = P.items.filter(function (x) { return x.sec === sc[0] && !x.skip; });
+      if (!its.length) return;
+      out.push('', sc[1]);
+      its.forEach(function (it) {
+        var r = it.pick && it.pick.r;
+        out.push('- ' + (shopIsLen(it) ? String(it.qty).replace('.', ',') + ' m de ' : it.qty + ' × ') + it.label + (shopIsLen(it) ? ' (à acheter : ' + shopBuy(it.qty) + ')' : '') +
+                 (r ? ' : ' + r.brand + (r.range ? ' ' + r.range : '') + ' réf. ' + r.ref : (it.kind ? ' : à choisir' : '')));
+      });
+    });
+    return out.join('\n');
+  }
+  function copyText(t) {
+    var fallback = function () {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; ta.style.top = '0';
+        document.body.appendChild(ta); ta.select();
+        var ok = document.execCommand('copy'); ta.remove();
+        return ok ? Promise.resolve() : Promise.reject(new Error('copy'));
+      } catch (e) { return Promise.reject(e); }
+    };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).catch(fallback); } catch (e) { /* presse-papiers indisponible */ }
+    return fallback();
+  }
+  function setShop(k, v) {
+    var ch = project.shop;
+    ui.shopOpen = true;
+    if (k === 'tab' && ch.tab !== v) ch.gamme = '';
+    ch[k] = v;
+    project.shop = shopClean(ch);
+    saveDraft();
+    renderListView();
+    var el = lists.querySelector('[data-shop="' + k + '"]');
+    if (el) el.focus({ preventScroll: true });
   }
 
   /* -- pas à pas */
@@ -8076,8 +8828,9 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
     }
     if (e.target.closest('#gen-close')) { closeOv(); return; }
     if (e.target.closest('#gen-go')) {
-      var before = JSON.stringify(project), r = generateDwelling(gen);
+      var before = JSON.stringify(project), r = generateDwelling(gen), keep = shopKeep(project.shop);
       project = normalize(r.project);
+      project.shop = keep;
       ui.box = null; ui.openUid = null; quiz.uid = null; newRound();
       refreshAll();
       $('#panel').scrollTop = 0;
@@ -8214,7 +8967,8 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   $('#idcal').addEventListener('click', function (e) { var b = e.target.closest('[data-idcal]'); if (!b) return; project.options.idCal = Number(b.dataset.idcal); refreshAll(); });
   $('#btn-sample').addEventListener('click', function () {
     var before = JSON.stringify(project);
-    project = normalize(sampleProject()); ui.box = null; ui.openUid = null;
+    var keepS = shopKeep(project.shop);
+    project = normalize(sampleProject()); project.shop = keepS; ui.box = null; ui.openUid = null;
     closeOv(false);
     refreshAll();
     $('#panel').scrollTop = 0;
@@ -8231,7 +8985,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
     }
     clearTimeout(clearArm); b.classList.remove('armed'); t.textContent = 'Tout effacer';
     var before = JSON.stringify(project);
-    project = normalize({ name: 'Mon installation', options: { idMode: project.options.idMode, idCal: project.options.idCal, idMin: 0 }, boxes: [{ id: 'b1', name: 'Boîte de dérivation' }], circuits: [] });
+    project = normalize({ name: 'Mon installation', options: { idMode: project.options.idMode, idCal: project.options.idCal, idMin: 0 }, boxes: [{ id: 'b1', name: 'Boîte de dérivation' }], circuits: [], shop: shopKeep(project.shop) });
     ui.openUid = null;
     closeOv(false);
     refreshAll();
@@ -8270,6 +9024,8 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
       lenT = setTimeout(function () { var r = $('#lenres'); if (r) r.innerHTML = lengthResults(); saveDraft(); }, 250);
     }
   });
+  // ouverture du résumé « Tes marques » gardée d'un affichage à l'autre (l'événement ne remonte pas : on l'écoute à la descente)
+  lists.addEventListener('toggle', function (e) { if (e.target.classList && e.target.classList.contains('shop-chd')) ui.shopOpen = e.target.open; }, true);
   lists.addEventListener('keydown', function (e) {
     if (e.target.id === 'pq' && e.key === 'Enter') {
       e.preventDefault();
@@ -8279,6 +9035,14 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   });
   lists.addEventListener('change', function (e) {
     var t = e.target;
+    if (t.dataset.shop !== undefined) { setShop(t.dataset.shop, t.value); return; }
+    if (t.dataset.pick !== undefined) {
+      var pk = t.dataset.pick;
+      project.shop.picks[pk] = t.value;
+      saveDraft(); renderListView();
+      var el = lists.querySelector('[data-pick="' + pk + '"]'); if (el) el.focus({ preventScroll: true });
+      return;
+    }
     if (t.dataset.step) {
       if (t.checked) steps.done[t.dataset.step] = 1; else delete steps.done[t.dataset.step];
       t.closest('li').classList.toggle('done', t.checked);
@@ -8298,6 +9062,22 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   });
   lists.addEventListener('click', function (e) {
     var t = e.target;
+    var mv = t.closest('[data-matv]');
+    if (mv) { if (mv.dataset.matv !== ui.mat) setMatView(mv.dataset.matv, true); return; }
+    var sr = t.closest('[data-shopref]');
+    if (sr) { setTab('parts'); selectPart(sr.dataset.shopref); return; }
+    if (t.closest('#shop-auto')) {
+      project.shop = shopAuto(project.shop); saveDraft(); renderListView();
+      toast('Choisi : ' + project.shop.tab + ' pour le tableau, ' + project.shop.mur.replace('|', ' ') + ' pour les interrupteurs et prises. Tu peux changer.');
+      return;
+    }
+    if (t.closest('#shop-reset')) { project.shop.picks = {}; saveDraft(); renderListView(); toast('Références conseillées remises.'); return; }
+    if (t.closest('#shop-csv')) { exportShop(t.closest('#shop-csv')); return; }
+    if (t.closest('#shop-copy')) {
+      copyText(shopText()).then(function () { toast('Liste copiée : colle-la dans un message ou une note.'); },
+                                function () { toast(downloads ? 'Copie impossible ici : télécharge plutôt la liste.' : 'Copie impossible ici.'); });
+      return;
+    }
     var pr = t.closest('[data-pref]'), pt = t.closest('[data-ptype]');
     if (pr) { selectPart(pr.dataset.pref); return; }
     if (pt) { selectPart('t:' + pt.dataset.ptype); return; }
@@ -8386,6 +9166,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
       ex.querySelector('[data-exp="png"]').hidden = !svgTab;
       ex.querySelector('[data-exp="svg"]').hidden = !svgTab;
       ex.querySelector('[data-exp="labels"]').hidden = ui.tab !== 'labels';
+      ex.querySelector('[data-exp="shop"]').hidden = ui.tab !== 'list';
     }
     syncToolbar();
   }
@@ -8412,7 +9193,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
       return new Promise(function (resolve, reject) { cv.toBlob(function (b) { b ? resolve(b) : reject(new Error('png')); }, 'image/png'); });
     });
   }
-  function pdfText(s) { return String(s).replace(/→/g, '->').replace(/≤/g, '<=').replace(/−/g, '-').replace(/[↑]/g, '(haut)').replace(/[↓]/g, '(bas)').replace(/[^\x00-\xFF—…Œœ]/g, ''); }
+  function pdfText(s) { return String(s).replace(/[’‘]/g, "'").replace(/→/g, '->').replace(/≤/g, '<=').replace(/−/g, '-').replace(/[↑]/g, '(haut)').replace(/[↓]/g, '(bas)').replace(/[^\x00-\xFF—…Œœ]/g, ''); }
   function csvText() {
     var L = buildLists(model), q = function (v) { v = String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var rows = [['N°', 'Couleur', 'Section (mm²)', 'Circuit', 'Rôle', 'Côté tableau', 'Arrivée']];
@@ -8503,15 +9284,25 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
         });
         y += 8; line('Ponts dans le tableau', 12, true);
         L.ponts.forEach(function (p) { line(p.txt + ' · ' + WN[p.c] + ' ' + secTxt(p.sec) + ' mm²', 9); });
-        y += 8; line('Matériel', 12, true);
-        var groups = [['Tableau', L.mat.tableau]];
-        if (model.multiBox) Object.keys(L.boxMat).forEach(function (b) { groups.push([b, L.boxMat[b]]); }); else groups.push(['Boîte de dérivation', L.mat.boite]);
-        groups.push(['Appareils', L.mat.appareils]);
-        groups.forEach(function (g) {
-          if (!Object.keys(g[1]).length) return;
-          line(g[0], 10, true);
-          Object.keys(g[1]).forEach(function (k) { line(g[1][k] + ' × ' + k, 9, false, 10); });
+        // liste de courses (avec les marques choisies dans l'onglet Matériel)
+        doc.addPage('a4', 'portrait'); y = 50;
+        var P = shopPlanNow();
+        line('Liste de courses · ' + model.name, 16, true);
+        line(P.asked ? 'Tableau : ' + P.ch.tab + (P.fam ? ' ' + P.fam : '') + ' · Interrupteurs et prises : ' + P.ch.mur.replace('|', ' ')
+                     : 'Marques pas encore choisies : choisis-les dans l’onglet Matériel pour avoir les références.', 9.5); y += 6;
+        SHOP_SECTIONS.forEach(function (sc) {
+          var its = P.items.filter(function (x) { return x.sec === sc[0] && !x.skip; });
+          if (!its.length) return;
+          y += 4; line(sc[1], 12, true);
+          its.forEach(function (it) {
+            var r = it.pick && it.pick.r;
+            line((shopIsLen(it) ? String(it.qty).replace('.', ',') + ' m  ' : it.qty + ' ×  ') + it.label + (shopIsLen(it) ? ' (à acheter : ' + shopBuy(it.qty) + ')' : '') +
+                 (r ? '  ·  ' + r.brand + (r.range ? ' ' + r.range : '') + ' réf. ' + r.ref : (it.kind ? '  ·  à choisir' : '')), 9, false, 10);
+          });
         });
+        y += 8; line('Ce qui va ensemble', 12, true);
+        P.checks.forEach(function (c) { line((c.ok === true ? 'OK  ' : (c.ok === false ? 'À voir  ' : 'Note  ')) + c.t, 9, false, 10); });
+        y += 6; line('Références de la base ElectroPlan (' + APPDB_DATE + ') : vérifie la notice de chaque appareil. Prix et stock : vois avec ton distributeur.', 8.5);
         return doc.output('blob');
       });
   }
@@ -8539,6 +9330,14 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
     });
     return Promise.resolve(doc.output('blob'));
   }
+  function exportShop(b) {
+    if (!downloads) return;
+    if (b) b.disabled = true;
+    downloads.save({ filename: slug(project.name) + '-liste-de-courses.csv', data: shopCsv() })
+      .then(function (r) { if (r && r.status === 'saved') toast('Liste de courses téléchargée.'); })
+      .catch(function (err) { if (!(err && err.code === 'declined')) toast('Le téléchargement n\'a pas abouti. Réessaie.'); })
+      .then(function () { if (b) b.disabled = false; });
+  }
   $('#exportctl').addEventListener('click', function (e) {
     var b = e.target.closest('[data-exp]');
     if (!b || !downloads) return;
@@ -8560,6 +9359,8 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
       job = buildPdf().then(function (blob) { return downloads.save({ filename: base + '.pdf', data: blob }); });
     } else if (kind === 'labels') {
       job = buildLabelsPdf().then(function (blob) { return downloads.save({ filename: base + '-etiquettes.pdf', data: blob }); });
+    } else if (kind === 'shop') {
+      job = downloads.save({ filename: base + '-liste-de-courses.csv', data: shopCsv() });
     } else {
       job = downloads.save({ filename: base + '-fils.csv', data: csvText() });
     }
@@ -8706,7 +9507,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
 
   /* ---------------------------------------------------------------- interface : téléphone ou ordinateur */
   var MQ = window.matchMedia ? window.matchMedia('(max-width: 820px), (max-height: 520px) and (pointer: coarse)') : null;
-  var VIEW_NAMES = { edit: 'Circuits', plans: 'Plans', list: 'Fils et longueurs', steps: 'Pas à pas', quiz: 'Entraînement', parts: 'Appareils' };
+  var VIEW_NAMES = { edit: 'Circuits', plans: 'Plans', list: 'Matériel', steps: 'Pas à pas', quiz: 'Entraînement', parts: 'Appareils' };
   function wantMode() { return ui.pref === 'mobile' || ui.pref === 'pc' ? ui.pref : (MQ && MQ.matches ? 'mobile' : 'pc'); }
   // quelques éléments changent de place selon l'interface (le reste ne fait que changer d'allure)
   function placeElements() {
@@ -8775,6 +9576,8 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   window.addEventListener('hashchange', function () {
     var h = (location.hash || '').replace('#', '');
     if (h === 'circuits') { if (ui.mode === 'mobile') goView('edit'); return; }
+    if (h === 'mentions-legales') { openLegal(); return; }
+    if (h === 'fils') { ui.mat = 'fils'; if (ui.tab !== 'list' || ui.view === 'edit') setTab('list'); else renderListView(); return; }
     Object.keys(TABS).forEach(function (k) { if (TABS[k] === h && (k !== ui.tab || ui.view === 'edit')) setTab(k); });
   });
 
@@ -8823,6 +9626,13 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
     });
   })();
 
+  /* -- mentions légales et confidentialité */
+  function openLegal(opener) {
+    $('#legal-claude').hidden = STANDALONE;
+    if (OV.el && OV.el.id === 'ov-legal') return;
+    openOv('ov-legal', opener);
+  }
+
   /* -- boutons d'action, où qu'ils soient (en-tête, menu, messages vides) */
   function openAdd(opener) {
     if (ui.mode === 'mobile') { if (ui.view !== 'edit') goView('edit'); openOv('ov-add', opener || $('#fab-add')); return; }
@@ -8841,6 +9651,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
     else if (a === 'menu') openOv('ov-menu', b);
     else if (a === 'dl') openOv('ov-dl', b);
     else if (a === 'keys') openOv('ov-keys', b);
+    else if (a === 'legal') openLegal(b);
     else if (a === 'parts') { closeOv(false); openParts(); }
     else if (a === 'panel') togglePanel();
     else if (a === 'alerts') {
@@ -8877,6 +9688,7 @@ if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: s
   applyMode(true);
   refreshAll();
   renderSaved();
+  if (hsh === 'mentions-legales') openLegal();
   if (window.claude && typeof window.claude.use === 'function') {
     // page servie seule (pas dans le cadre de Claude) : le navigateur peut télécharger lui-même
     window.claude.use('downloads').then(function (d) { downloads = d || (FRAMED ? null : browserDownloads); updateExportButtons(); }).catch(function () {});

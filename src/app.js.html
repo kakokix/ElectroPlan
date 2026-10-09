@@ -3,7 +3,7 @@
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
   var DRAFT_KEY = 'cabloplan:draft', SAVED_KEY = 'cabloplan:saved', STEPS_KEY = 'cabloplan:steps:';
-  var UI_KEY = 'cabloplan:ui', PANEL_KEY = 'cabloplan:panel', SIDEW_KEY = 'cabloplan:sidew', ZHINT_KEY = 'cabloplan:zhint', FOCUS_KEY = 'cabloplan:focushint';
+  var UI_KEY = 'cabloplan:ui', PANEL_KEY = 'cabloplan:panel', SIDEW_KEY = 'cabloplan:sidew', ZHINT_KEY = 'cabloplan:zhint', FOCUS_KEY = 'cabloplan:focushint', MAT_KEY = 'cabloplan:mat';
   var viewer = $('#viewer'), lists = $('#lists'), root = document.documentElement;
   var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -39,7 +39,7 @@
                     tabSide: SIDES.indexOf(o.tabSide) >= 0 ? o.tabSide : 'right', gaines: o.gaines === 'circuit' ? 'circuit' : 'groupe' };
     var boxes = normBoxes(p.boxes);
     var out = { name: String(p.name || 'Mon installation').slice(0, 80), options: options, boxes: boxes,
-                lengths: normLengths(p.lengths, options.idMode === 'single'), circuits: [] };
+                lengths: normLengths(p.lengths, options.idMode === 'single'), shop: shopClean(p.shop), circuits: [] };
     (p.circuits || []).slice(0, 60).forEach(function (c) {
       if (!c || !CATALOG[c.type]) return;
       var d = defaultCircuit(c.type);
@@ -69,7 +69,7 @@
   try { project = normalize(JSON.parse(lsGet(DRAFT_KEY))); } catch (e) { project = null; }
   if (!project) project = normalize(sampleProject());
 
-  var TABS = { box: 'boite', tab: 'tableau', uni: 'unifilaire', list: 'fils', labels: 'etiquettes', steps: 'pas-a-pas', quiz: 'entrainement', parts: 'appareils' };
+  var TABS = { box: 'boite', tab: 'tableau', uni: 'unifilaire', list: 'materiel', labels: 'etiquettes', steps: 'pas-a-pas', quiz: 'entrainement', parts: 'appareils' };
   var TAB_ORDER = ['box', 'tab', 'uni', 'list', 'labels', 'steps', 'quiz', 'parts'];
   var SVG_TABS = { box: 1, tab: 1, uni: 1, labels: 1 };
   /* mode : 'pc' ou 'mobile' (interface) ; view : vue affichée sur téléphone ('edit' = circuits, 'plans', 'list', 'steps', 'quiz') */
@@ -77,8 +77,12 @@
              mode: null, pref: 'auto', view: 'plans', plan: 'box', scroll: {}, vscroll: {}, openUid: null, stepOpen: {}, entOpen: {}, boxFocus: null, alertsOpen: undefined, lastWarn: 0 };
   ui.pref = lsGet(UI_KEY) || 'auto';
   if (ui.pref !== 'mobile' && ui.pref !== 'pc') ui.pref = 'auto';
+  // onglet Matériel : la liste de courses ('shop') ou les fils et longueurs ('fils')
+  ui.mat = lsGet(MAT_KEY) === 'fils' ? 'fils' : 'shop';
   var hsh = (location.hash || '').replace('#', ''), hashTab = false;
   Object.keys(TABS).forEach(function (k) { if (TABS[k] === hsh) { ui.tab = k; hashTab = true; } });
+  // anciens liens : #fils ouvre les fils et longueurs
+  if (hsh === 'fils') { ui.tab = 'list'; ui.mat = 'fils'; hashTab = true; }
   function tabView(t) { return SVG_TABS[t] ? 'plans' : t; }
   if (SVG_TABS[ui.tab]) ui.plan = ui.tab;
   ui.view = hsh === 'circuits' ? 'edit' : (hashTab ? tabView(ui.tab) : (project.circuits.length ? 'plans' : 'edit'));
@@ -263,11 +267,11 @@
   function emptyListHtml() { var m = emptyMsg(); return emptyHtml(m[0], m[1], EMPTY_ACTIONS); }
   // les vues en liste (fils, pas à pas, entraînement) partagent un seul conteneur : chacune retrouve sa position de défilement
   function setLists(h) {
-    var same = lists.dataset.tab === ui.tab, top = lists.scrollTop;
+    var key = ui.tab === 'list' ? 'list:' + ui.mat : ui.tab, same = lists.dataset.tab === key, top = lists.scrollTop;
     if (!same && lists.dataset.tab) ui.scroll[lists.dataset.tab] = top;
     lists.innerHTML = h;
-    lists.dataset.tab = ui.tab;
-    lists.scrollTop = same ? top : (ui.scroll[ui.tab] || 0);
+    lists.dataset.tab = key;
+    lists.scrollTop = same ? top : (ui.scroll[key] || 0);
   }
   function renderBoxPick() {
     var bp = $('#boxpick'), ub = model ? model.usedBoxes : [];
@@ -358,8 +362,20 @@
   function renderListView() {
     hideBusy();
     if (!model.circuits.length) { setLists(emptyListHtml()); return; }
+    var h = '<section class="mat-seg"><div class="seg" role="tablist" aria-label="Matériel">' +
+      '<button type="button" role="tab" data-matv="shop" aria-selected="' + (ui.mat === 'shop') + '">' + ic('cart') + 'Liste de courses</button>' +
+      '<button type="button" role="tab" data-matv="fils" aria-selected="' + (ui.mat === 'fils') + '">' + ic('cable') + 'Fils et longueurs</button></div></section>';
+    setLists(h + (ui.mat === 'fils' ? filsHtml() : shopHtml()));
+  }
+  function setMatView(v, focus) {
+    ui.mat = v === 'fils' ? 'fils' : 'shop';
+    lsSet(MAT_KEY, ui.mat);
+    renderListView();
+    if (focus) { var b = lists.querySelector('[data-matv="' + ui.mat + '"]'); if (b) b.focus({ preventScroll: true }); }
+  }
+  function filsHtml() {
     var L = buildLists(model), h = '', multi = model.multiBox, mob = ui.mode === 'mobile';
-    h += '<section>' + ttl('ruler', 'Longueurs à prévoir') + '<p class="note">Mets tes distances : le métrage se met à jour tout seul.</p>' + lengthInputs() + '<div id="lenres">' + lengthResults() + '</div></section>';
+    h += '<section>' + ttl('ruler', 'Longueurs à prévoir') + '<p class="note">Mets tes distances : le métrage se met à jour tout seul, ici et dans la liste de courses.</p>' + lengthInputs() + '<div id="lenres">' + lengthResults() + '</div></section>';
     h += '<section>' + ttl('cable', 'Fils qui partent du tableau') + '<p class="note">Un numéro par fil : repère-le aux deux bouts.</p>';
     if (mob) {
       // téléphone : une carte par fil, avec son repère comme sur le plan
@@ -418,14 +434,159 @@
     h += '<section>' + ttl('link', 'Ponts dans le tableau') + '<div class="tbl-wrap"><table><thead><tr><th>Liaison</th><th>Fil</th><th>Section</th></tr></thead><tbody>';
     L.ponts.forEach(function (p) { h += '<tr><td>' + esc(p.txt) + '</td><td class="wn">' + swatch(p.c) + esc(WN[p.c]) + '</td><td class="wn">' + secTxt(p.sec) + ' mm²</td></tr>'; });
     h += '</tbody></table></div></section>';
-    var mat = function (title, o) {
-      var ks = Object.keys(o);
-      if (!ks.length) return '';
-      return '<div class="tot"><h3>' + esc(title) + '</h3><ul>' + ks.map(function (k) { return '<li>' + esc(k) + '<em>× ' + o[k] + '</em></li>'; }).join('') + '</ul></div>';
+    h += '<p class="note mat-more">Ce qu’il faut acheter (appareils, boîtes, bornes, couronnes de fil) est dans la <button type="button" class="linkbtn" data-matv="shop">liste de courses</button>.</p>';
+    return h;
+  }
+
+  /* -- liste de courses : une marque par famille de produits, puis les références compatibles pour chaque article */
+  function shopPlanNow() { return shopPlan(model, project.lengths, project.shop); }
+  function shopBrandTxt(r) { return r.brand.replace(' Electric', '') + (r.range ? ' ' + r.range : ''); }
+  function shopIsLen(it) { return it.kind === 'fil' || it.kind === 'gaine'; }
+  function shopQtyTxt(it) { return shopIsLen(it) ? String(it.qty).replace('.', ',') + ' m' : '× ' + it.qty; }
+  function shopChoicesHtml(P) {
+    var ch = P.ch, has = {};
+    P.items.forEach(function (x) { has[x.sec] = 1; has[x.kind] = 1; });
+    var field = function (k, label, opts, cur, need) {
+      return '<label class="shop-f' + (need ? ' need' : '') + '"><span>' + esc(label) + '</span><select data-shop="' + k + '">' + opts.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+      }).join('') + '</select></label>';
     };
-    var boxCards = multi ? Object.keys(L.boxMat).map(function (b) { return mat(b, L.boxMat[b]); }).join('') : mat('Boîte de dérivation', L.mat.boite);
-    h += '<section>' + ttl('wrench', 'Matériel') + '<div class="mat">' + mat('Tableau', L.mat.tableau) + boxCards + mat('Appareils', L.mat.appareils) + '</div></section>';
-    setLists(h);
+    var all = function (list) { return [['', 'Toutes les marques']].concat(list.map(function (b) { return [b, b]; })); };
+    var grp = function (title, icon, inner) { return '<fieldset class="shop-fam"><legend>' + ic(icon) + esc(title) + '</legend>' + inner + '</fieldset>'; };
+    var h = '<div class="shop-grid">';
+    if (has.tab) {
+      var ranges = ch.tab ? shopTabRanges(ch.tab) : [];
+      var f = field('tab', 'Marque', [['', '— choisis la marque —']].concat(shopTabBrands().map(function (b) { return [b, b]; })), ch.tab, !ch.tab);
+      if (ranges.length > 1) f += field('gamme', 'Gamme des disjoncteurs', [['', 'La plus complète (' + ranges[0] + ')']].concat(ranges.map(function (g) { return [g, g]; })), ch.gamme);
+      if (ch.tab) f += field('term', 'Raccordement', [['', 'Peu importe'], ['vis', 'Bornes à vis'], ['auto', 'Bornes automatiques']], ch.term);
+      h += grp('Tableau électrique', 'panel', f);
+    }
+    if (has.mur) {
+      h += grp('Interrupteurs et prises', 'plug', field('mur', 'Gamme', [['', '— choisis la gamme —']].concat(shopWallRanges().map(function (k) { return [k, k.replace('|', ' · ')]; })), ch.mur, !ch.mur) +
+        field('color', 'Couleur', [['blanc', 'Blanc'], ['', 'Peu importe']], ch.color));
+    }
+    if (has.bat || has.dclbox || has.bdd) {
+      var f2 = '';
+      if (has.bat || has.dclbox) f2 += field('support', 'Pose', [['mac', 'Maçonnerie (à sceller)'], ['cloison', 'Cloison sèche (plaque de plâtre)'], ['air', 'Étanche à l’air']], ch.support) +
+                                       field('boxBrand', 'Boîtes d’encastrement et DCL', all(shopBoxBrands()), ch.boxBrand);
+      if (has.bdd) f2 += field('bddBrand', 'Boîte de dérivation', all(shopBddBrands()), ch.bddBrand);
+      h += grp('Boîtes', 'box', f2);
+    }
+    if (has.wago || has.gaine) {
+      var f3 = '';
+      if (has.wago) f3 += field('wago', 'Bornes de connexion', [['221', 'WAGO 221, à levier'], ['2273', 'WAGO 2273, fils rigides'], ['2773', 'WAGO 2773, fils rigides']], ch.wago);
+      if (has.gaine) f3 += field('gaineBrand', 'Gaines ICTA', all(shopGaineBrands()), ch.gaineBrand);
+      h += grp('Bornes et gaines', 'link', f3);
+    }
+    return h + '</div>';
+  }
+  function shopRowHtml(it) {
+    var r = it.pick ? it.pick.r : null, n = it.need, cls = 'shop-row' + (it.skip ? ' skip' : '') + (it.warn ? ' miss' : '') + (!it.kind ? ' plain' : '');
+    var h = '<li class="' + cls + '"><span class="shop-q">' + (it.skip ? '—' : shopQtyTxt(it)) + '</span><div class="shop-m"><b class="shop-l">' + esc(it.label) + '</b>';
+    if (shopIsLen(it)) h += '<span class="shop-len">' + String(n.want.m).replace('.', ',') + ' m à tirer, marge comprise · à acheter : ' + esc(shopBuy(n.want.m)) + '</span>';
+    if (it.cands.length && !it.skip) {
+      h += '<select data-pick="' + esc(it.key) + '" aria-label="Référence pour : ' + esc(it.label) + '"><option value="-"' + (r ? '' : ' selected') + '>' +
+        (it.kind === 'eqp' ? '— à choisir avec le client —' : '— je choisirai en magasin —') + '</option>' +
+        it.cands.slice(0, 60).map(function (c) {
+          return '<option value="' + esc(c.r.brand + '|' + c.r.ref) + '"' + (r && c.r === r ? ' selected' : '') + '>' + esc(c.r.ref + ' · ' + shopBrandTxt(c.r) + ' · ' + c.r.name + (c.why ? ' (' + c.why + ')' : '')) + '</option>';
+        }).join('') + '</select>';
+    }
+    if (r) h += '<div class="shop-sub"><span class="mono">' + esc(r.ref) + '</span><span>' + esc(shopBrandTxt(r)) + '</span>' + (r.specs ? '<span>' + esc(r.specs) + '</span>' : '') +
+                '<button type="button" class="linkbtn" data-shopref="' + esc(r.id) + '">Voir la fiche et le câblage</button></div>';
+    if (it.pick && it.pick.why) h += '<p class="shop-note">' + esc(it.pick.why.charAt(0).toUpperCase() + it.pick.why.slice(1)) + '.</p>';
+    if (it.warn) h += '<p class="shop-warn">' + esc(it.warn) + '</p>';
+    if (it.note) h += '<p class="shop-note">' + esc(it.note) + '</p>';
+    return h + '</div></li>';
+  }
+  var SHOP_FAQ = 'https://www.legrand.fr/questions-frequentes/quelle-est-la-norme-nf-c-15-100-pour-le-tableau-electrique';
+  function shopHtml() {
+    var P = shopPlanNow(), ch = P.ch, h = '', picked = Object.keys(project.shop.picks || {}).length;
+    var inner = '<p class="note">' + (P.asked ? 'Change une marque ou une gamme : la liste reprend des références compatibles entre elles.'
+        : 'Quelle marque veux-tu pour chaque produit ? Commence par la marque du tableau et la gamme des interrupteurs et prises : pour chaque article, la liste prendra une référence compatible, relevée sur le site du fabricant ou d’un distributeur.') + '</p>' +
+      shopChoicesHtml(P) +
+      '<div class="row-actions">' + (P.asked ? '' : '<button type="button" class="primary sm" id="shop-auto">' + ic('sparkles') + 'Choisir pour moi</button>') +
+      (picked ? '<button type="button" class="ghost sm" id="shop-reset">Remettre les références conseillées</button>' : '') + '</div>';
+    if (P.asked) {
+      // marques déjà choisies : un résumé, qu'on ouvre pour les changer
+      var sum = [ch.tab + (P.fam ? ' ' + P.fam : ''), ch.mur.replace('|', ' ')].concat(P.items.some(function (x) { return x.kind === 'wago'; }) ? ['WAGO ' + ch.wago] : []).join(' · ');
+      h += '<section class="shop-ch"><details class="shop-chd"' + (ui.shopOpen ? ' open' : '') + '><summary><span class="shop-cht">' + ttl('cart', 'Tes marques') +
+        '<span class="shop-chs">' + esc(sum) + '</span></span><span class="shop-chm">Changer</span><span class="chev" aria-hidden="true"></span></summary>' + inner + '</details></section>';
+    } else h += '<section class="shop-ch ask">' + ttl('cart', 'Choisis tes marques') + inner + '</section>';
+    SHOP_SECTIONS.forEach(function (sc) {
+      var its = P.items.filter(function (x) { return x.sec === sc[0]; });
+      if (!its.length) return;
+      var sub = sc[0] === 'tab' && ch.tab ? ch.tab + (P.fam ? ' · ' + P.fam : '') : (sc[0] === 'mur' && ch.mur ? ch.mur.replace('|', ' · ') : '');
+      h += '<section class="shop-sec">' + ttl(sc[2], esc(sc[1])) + (sub ? '<p class="note shop-brand">' + esc(sub) + '</p>' : '') +
+        (sc[0] === 'fil' ? '<p class="note">Métrage calculé avec tes distances : <button type="button" class="linkbtn" data-matv="fils">les régler</button>.</p>' : '') +
+        (sc[0] === 'eqp' ? '<p class="note">Ils se choisissent avec le client (puissance, taille, commande) : la liste montre ceux de la base.</p>' : '') +
+        '<ul class="shop-list">' + its.map(shopRowHtml).join('') + '</ul></section>';
+    });
+    h += '<section class="shop-compat">' + ttl('shield', 'Ce qui va ensemble') + '<ul class="checks">' + P.checks.map(function (c) {
+      return '<li class="' + (c.ok === true ? 'ok' : (c.ok === false ? 'ko' : 'inf')) + '">' + esc(c.t) + '</li>';
+    }).join('') + '</ul>' +
+      '<details class="shop-rules"><summary>Les règles à retenir<span class="chev" aria-hidden="true"></span></summary><ul>' +
+      '<li>Peigne, disjoncteurs et différentiels : même marque et même gamme, sinon les dents du peigne peuvent ne pas tomber sur les bornes.</li>' +
+      '<li>Tableau d’un logement individuel : 20 % de place libre pour plus tard (6 modules au moins en logement collectif), et aucune rangée vide. <a href="' + SHOP_FAQ + '" target="_blank" rel="noopener">Source : Legrand</a></li>' +
+      '<li>Différentiel : un type supérieur (A à la place de AC, F à la place de A) ou un calibre plus grand convient aussi.</li>' +
+      '<li>Prises : fixées par vis dans la boîte d’encastrement, jamais par griffes.</li>' +
+      '<li>Mécanismes, enjoliveurs et plaques : de la même gamme, sinon ils ne s’emboîtent pas.</li>' +
+      '<li>WAGO 221 : fils rigides et souples. WAGO 2273 et 2773 : fils rigides (et semi-rigides pour la 2773).</li>' +
+      '<li>Fils : bleu pour le neutre, vert/jaune pour la terre, jamais ces couleurs pour une phase.</li></ul></details></section>';
+    h += '<section class="shop-act">' + ttl('download', 'Emporter la liste') + '<div class="row-actions">' +
+      (downloads ? '<button type="button" id="shop-csv">' + ic('download') + 'Télécharger (tableur CSV)</button>' : '') +
+      '<button type="button" id="shop-copy">' + ic('checks') + 'Copier la liste</button></div>' +
+      '<p class="note">Prix et stock : vois avec ton distributeur. Les références viennent de la base d’ElectroPlan (relevée en ' + esc(APPDB_DATE) + ') ; vérifie toujours la notice avant de câbler.</p></section>';
+    return h;
+  }
+  function shopSecName(sec) { return (SHOP_SECTIONS.filter(function (x) { return x[0] === sec; })[0] || ['', ''])[1]; }
+  function csvQ(v) { v = String(v == null ? '' : v); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function shopCsv() {
+    var P = shopPlanNow(), rows = [['Rubrique', 'Quantité', 'Unité', 'Article', 'Marque', 'Gamme', 'Référence', 'Désignation', 'Source']];
+    P.items.forEach(function (it) {
+      if (it.skip) return;
+      var r = it.pick && it.pick.r;
+      rows.push([shopSecName(it.sec), String(it.qty).replace('.', ','), shopIsLen(it) ? 'm' : 'pièce', it.label + (shopIsLen(it) ? ' (à acheter : ' + shopBuy(it.qty) + ')' : ''),
+                 r ? r.brand : '', r ? r.range : '', r ? r.ref : '', r ? r.name : (it.kind ? 'à choisir' : ''), r ? r.url : '']);
+    });
+    return '﻿' + rows.map(function (r) { return r.map(csvQ).join(';'); }).join('\r\n');
+  }
+  function shopText() {
+    var P = shopPlanNow(), out = ['Liste de courses · ' + project.name + ' (ElectroPlan)'];
+    SHOP_SECTIONS.forEach(function (sc) {
+      var its = P.items.filter(function (x) { return x.sec === sc[0] && !x.skip; });
+      if (!its.length) return;
+      out.push('', sc[1]);
+      its.forEach(function (it) {
+        var r = it.pick && it.pick.r;
+        out.push('- ' + (shopIsLen(it) ? String(it.qty).replace('.', ',') + ' m de ' : it.qty + ' × ') + it.label + (shopIsLen(it) ? ' (à acheter : ' + shopBuy(it.qty) + ')' : '') +
+                 (r ? ' : ' + r.brand + (r.range ? ' ' + r.range : '') + ' réf. ' + r.ref : (it.kind ? ' : à choisir' : '')));
+      });
+    });
+    return out.join('\n');
+  }
+  function copyText(t) {
+    var fallback = function () {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; ta.style.top = '0';
+        document.body.appendChild(ta); ta.select();
+        var ok = document.execCommand('copy'); ta.remove();
+        return ok ? Promise.resolve() : Promise.reject(new Error('copy'));
+      } catch (e) { return Promise.reject(e); }
+    };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).catch(fallback); } catch (e) { /* presse-papiers indisponible */ }
+    return fallback();
+  }
+  function setShop(k, v) {
+    var ch = project.shop;
+    ui.shopOpen = true;
+    if (k === 'tab' && ch.tab !== v) ch.gamme = '';
+    ch[k] = v;
+    project.shop = shopClean(ch);
+    saveDraft();
+    renderListView();
+    var el = lists.querySelector('[data-shop="' + k + '"]');
+    if (el) el.focus({ preventScroll: true });
   }
 
   /* -- pas à pas */
@@ -1294,8 +1455,9 @@
     }
     if (e.target.closest('#gen-close')) { closeOv(); return; }
     if (e.target.closest('#gen-go')) {
-      var before = JSON.stringify(project), r = generateDwelling(gen);
+      var before = JSON.stringify(project), r = generateDwelling(gen), keep = shopKeep(project.shop);
       project = normalize(r.project);
+      project.shop = keep;
       ui.box = null; ui.openUid = null; quiz.uid = null; newRound();
       refreshAll();
       $('#panel').scrollTop = 0;
@@ -1432,7 +1594,8 @@
   $('#idcal').addEventListener('click', function (e) { var b = e.target.closest('[data-idcal]'); if (!b) return; project.options.idCal = Number(b.dataset.idcal); refreshAll(); });
   $('#btn-sample').addEventListener('click', function () {
     var before = JSON.stringify(project);
-    project = normalize(sampleProject()); ui.box = null; ui.openUid = null;
+    var keepS = shopKeep(project.shop);
+    project = normalize(sampleProject()); project.shop = keepS; ui.box = null; ui.openUid = null;
     closeOv(false);
     refreshAll();
     $('#panel').scrollTop = 0;
@@ -1449,7 +1612,7 @@
     }
     clearTimeout(clearArm); b.classList.remove('armed'); t.textContent = 'Tout effacer';
     var before = JSON.stringify(project);
-    project = normalize({ name: 'Mon installation', options: { idMode: project.options.idMode, idCal: project.options.idCal, idMin: 0 }, boxes: [{ id: 'b1', name: 'Boîte de dérivation' }], circuits: [] });
+    project = normalize({ name: 'Mon installation', options: { idMode: project.options.idMode, idCal: project.options.idCal, idMin: 0 }, boxes: [{ id: 'b1', name: 'Boîte de dérivation' }], circuits: [], shop: shopKeep(project.shop) });
     ui.openUid = null;
     closeOv(false);
     refreshAll();
@@ -1488,6 +1651,8 @@
       lenT = setTimeout(function () { var r = $('#lenres'); if (r) r.innerHTML = lengthResults(); saveDraft(); }, 250);
     }
   });
+  // ouverture du résumé « Tes marques » gardée d'un affichage à l'autre (l'événement ne remonte pas : on l'écoute à la descente)
+  lists.addEventListener('toggle', function (e) { if (e.target.classList && e.target.classList.contains('shop-chd')) ui.shopOpen = e.target.open; }, true);
   lists.addEventListener('keydown', function (e) {
     if (e.target.id === 'pq' && e.key === 'Enter') {
       e.preventDefault();
@@ -1497,6 +1662,14 @@
   });
   lists.addEventListener('change', function (e) {
     var t = e.target;
+    if (t.dataset.shop !== undefined) { setShop(t.dataset.shop, t.value); return; }
+    if (t.dataset.pick !== undefined) {
+      var pk = t.dataset.pick;
+      project.shop.picks[pk] = t.value;
+      saveDraft(); renderListView();
+      var el = lists.querySelector('[data-pick="' + pk + '"]'); if (el) el.focus({ preventScroll: true });
+      return;
+    }
     if (t.dataset.step) {
       if (t.checked) steps.done[t.dataset.step] = 1; else delete steps.done[t.dataset.step];
       t.closest('li').classList.toggle('done', t.checked);
@@ -1516,6 +1689,22 @@
   });
   lists.addEventListener('click', function (e) {
     var t = e.target;
+    var mv = t.closest('[data-matv]');
+    if (mv) { if (mv.dataset.matv !== ui.mat) setMatView(mv.dataset.matv, true); return; }
+    var sr = t.closest('[data-shopref]');
+    if (sr) { setTab('parts'); selectPart(sr.dataset.shopref); return; }
+    if (t.closest('#shop-auto')) {
+      project.shop = shopAuto(project.shop); saveDraft(); renderListView();
+      toast('Choisi : ' + project.shop.tab + ' pour le tableau, ' + project.shop.mur.replace('|', ' ') + ' pour les interrupteurs et prises. Tu peux changer.');
+      return;
+    }
+    if (t.closest('#shop-reset')) { project.shop.picks = {}; saveDraft(); renderListView(); toast('Références conseillées remises.'); return; }
+    if (t.closest('#shop-csv')) { exportShop(t.closest('#shop-csv')); return; }
+    if (t.closest('#shop-copy')) {
+      copyText(shopText()).then(function () { toast('Liste copiée : colle-la dans un message ou une note.'); },
+                                function () { toast(downloads ? 'Copie impossible ici : télécharge plutôt la liste.' : 'Copie impossible ici.'); });
+      return;
+    }
     var pr = t.closest('[data-pref]'), pt = t.closest('[data-ptype]');
     if (pr) { selectPart(pr.dataset.pref); return; }
     if (pt) { selectPart('t:' + pt.dataset.ptype); return; }
@@ -1604,6 +1793,7 @@
       ex.querySelector('[data-exp="png"]').hidden = !svgTab;
       ex.querySelector('[data-exp="svg"]').hidden = !svgTab;
       ex.querySelector('[data-exp="labels"]').hidden = ui.tab !== 'labels';
+      ex.querySelector('[data-exp="shop"]').hidden = ui.tab !== 'list';
     }
     syncToolbar();
   }
@@ -1630,7 +1820,7 @@
       return new Promise(function (resolve, reject) { cv.toBlob(function (b) { b ? resolve(b) : reject(new Error('png')); }, 'image/png'); });
     });
   }
-  function pdfText(s) { return String(s).replace(/→/g, '->').replace(/≤/g, '<=').replace(/−/g, '-').replace(/[↑]/g, '(haut)').replace(/[↓]/g, '(bas)').replace(/[^\x00-\xFF—…Œœ]/g, ''); }
+  function pdfText(s) { return String(s).replace(/[’‘]/g, "'").replace(/→/g, '->').replace(/≤/g, '<=').replace(/−/g, '-').replace(/[↑]/g, '(haut)').replace(/[↓]/g, '(bas)').replace(/[^\x00-\xFF—…Œœ]/g, ''); }
   function csvText() {
     var L = buildLists(model), q = function (v) { v = String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var rows = [['N°', 'Couleur', 'Section (mm²)', 'Circuit', 'Rôle', 'Côté tableau', 'Arrivée']];
@@ -1721,15 +1911,25 @@
         });
         y += 8; line('Ponts dans le tableau', 12, true);
         L.ponts.forEach(function (p) { line(p.txt + ' · ' + WN[p.c] + ' ' + secTxt(p.sec) + ' mm²', 9); });
-        y += 8; line('Matériel', 12, true);
-        var groups = [['Tableau', L.mat.tableau]];
-        if (model.multiBox) Object.keys(L.boxMat).forEach(function (b) { groups.push([b, L.boxMat[b]]); }); else groups.push(['Boîte de dérivation', L.mat.boite]);
-        groups.push(['Appareils', L.mat.appareils]);
-        groups.forEach(function (g) {
-          if (!Object.keys(g[1]).length) return;
-          line(g[0], 10, true);
-          Object.keys(g[1]).forEach(function (k) { line(g[1][k] + ' × ' + k, 9, false, 10); });
+        // liste de courses (avec les marques choisies dans l'onglet Matériel)
+        doc.addPage('a4', 'portrait'); y = 50;
+        var P = shopPlanNow();
+        line('Liste de courses · ' + model.name, 16, true);
+        line(P.asked ? 'Tableau : ' + P.ch.tab + (P.fam ? ' ' + P.fam : '') + ' · Interrupteurs et prises : ' + P.ch.mur.replace('|', ' ')
+                     : 'Marques pas encore choisies : choisis-les dans l’onglet Matériel pour avoir les références.', 9.5); y += 6;
+        SHOP_SECTIONS.forEach(function (sc) {
+          var its = P.items.filter(function (x) { return x.sec === sc[0] && !x.skip; });
+          if (!its.length) return;
+          y += 4; line(sc[1], 12, true);
+          its.forEach(function (it) {
+            var r = it.pick && it.pick.r;
+            line((shopIsLen(it) ? String(it.qty).replace('.', ',') + ' m  ' : it.qty + ' ×  ') + it.label + (shopIsLen(it) ? ' (à acheter : ' + shopBuy(it.qty) + ')' : '') +
+                 (r ? '  ·  ' + r.brand + (r.range ? ' ' + r.range : '') + ' réf. ' + r.ref : (it.kind ? '  ·  à choisir' : '')), 9, false, 10);
+          });
         });
+        y += 8; line('Ce qui va ensemble', 12, true);
+        P.checks.forEach(function (c) { line((c.ok === true ? 'OK  ' : (c.ok === false ? 'À voir  ' : 'Note  ')) + c.t, 9, false, 10); });
+        y += 6; line('Références de la base ElectroPlan (' + APPDB_DATE + ') : vérifie la notice de chaque appareil. Prix et stock : vois avec ton distributeur.', 8.5);
         return doc.output('blob');
       });
   }
@@ -1757,6 +1957,14 @@
     });
     return Promise.resolve(doc.output('blob'));
   }
+  function exportShop(b) {
+    if (!downloads) return;
+    if (b) b.disabled = true;
+    downloads.save({ filename: slug(project.name) + '-liste-de-courses.csv', data: shopCsv() })
+      .then(function (r) { if (r && r.status === 'saved') toast('Liste de courses téléchargée.'); })
+      .catch(function (err) { if (!(err && err.code === 'declined')) toast('Le téléchargement n\'a pas abouti. Réessaie.'); })
+      .then(function () { if (b) b.disabled = false; });
+  }
   $('#exportctl').addEventListener('click', function (e) {
     var b = e.target.closest('[data-exp]');
     if (!b || !downloads) return;
@@ -1778,6 +1986,8 @@
       job = buildPdf().then(function (blob) { return downloads.save({ filename: base + '.pdf', data: blob }); });
     } else if (kind === 'labels') {
       job = buildLabelsPdf().then(function (blob) { return downloads.save({ filename: base + '-etiquettes.pdf', data: blob }); });
+    } else if (kind === 'shop') {
+      job = downloads.save({ filename: base + '-liste-de-courses.csv', data: shopCsv() });
     } else {
       job = downloads.save({ filename: base + '-fils.csv', data: csvText() });
     }
@@ -1924,7 +2134,7 @@
 
   /* ---------------------------------------------------------------- interface : téléphone ou ordinateur */
   var MQ = window.matchMedia ? window.matchMedia('(max-width: 820px), (max-height: 520px) and (pointer: coarse)') : null;
-  var VIEW_NAMES = { edit: 'Circuits', plans: 'Plans', list: 'Fils et longueurs', steps: 'Pas à pas', quiz: 'Entraînement', parts: 'Appareils' };
+  var VIEW_NAMES = { edit: 'Circuits', plans: 'Plans', list: 'Matériel', steps: 'Pas à pas', quiz: 'Entraînement', parts: 'Appareils' };
   function wantMode() { return ui.pref === 'mobile' || ui.pref === 'pc' ? ui.pref : (MQ && MQ.matches ? 'mobile' : 'pc'); }
   // quelques éléments changent de place selon l'interface (le reste ne fait que changer d'allure)
   function placeElements() {
@@ -1993,6 +2203,8 @@
   window.addEventListener('hashchange', function () {
     var h = (location.hash || '').replace('#', '');
     if (h === 'circuits') { if (ui.mode === 'mobile') goView('edit'); return; }
+    if (h === 'mentions-legales') { openLegal(); return; }
+    if (h === 'fils') { ui.mat = 'fils'; if (ui.tab !== 'list' || ui.view === 'edit') setTab('list'); else renderListView(); return; }
     Object.keys(TABS).forEach(function (k) { if (TABS[k] === h && (k !== ui.tab || ui.view === 'edit')) setTab(k); });
   });
 
@@ -2041,6 +2253,13 @@
     });
   })();
 
+  /* -- mentions légales et confidentialité */
+  function openLegal(opener) {
+    $('#legal-claude').hidden = STANDALONE;
+    if (OV.el && OV.el.id === 'ov-legal') return;
+    openOv('ov-legal', opener);
+  }
+
   /* -- boutons d'action, où qu'ils soient (en-tête, menu, messages vides) */
   function openAdd(opener) {
     if (ui.mode === 'mobile') { if (ui.view !== 'edit') goView('edit'); openOv('ov-add', opener || $('#fab-add')); return; }
@@ -2059,6 +2278,7 @@
     else if (a === 'menu') openOv('ov-menu', b);
     else if (a === 'dl') openOv('ov-dl', b);
     else if (a === 'keys') openOv('ov-keys', b);
+    else if (a === 'legal') openLegal(b);
     else if (a === 'parts') { closeOv(false); openParts(); }
     else if (a === 'panel') togglePanel();
     else if (a === 'alerts') {
@@ -2095,6 +2315,7 @@
   applyMode(true);
   refreshAll();
   renderSaved();
+  if (hsh === 'mentions-legales') openLegal();
   if (window.claude && typeof window.claude.use === 'function') {
     // page servie seule (pas dans le cadre de Claude) : le navigateur peut télécharger lui-même
     window.claude.use('downloads').then(function (d) { downloads = d || (FRAMED ? null : browserDownloads); updateExportButtons(); }).catch(function () {});

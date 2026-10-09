@@ -50,6 +50,7 @@
   <symbol id="i-hash" viewBox="0 0 24 24"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></symbol>
   <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
   <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
 </svg>
 
@@ -108,7 +109,7 @@
         <p class="hint" id="id-hint"></p>
       </section>
       <p class="foot m-only">Plans pour l'apprentissage, à faire valider par ton formateur : vérifie les repères des bornes sur tes appareils et câble toujours hors tension.</p>
-      <p class="foot-brand m-only">ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a></p>
+      <p class="foot-brand m-only">ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a> · <button type="button" class="linkbtn" data-do="legal">Mentions légales et confidentialité</button></p>
     </aside>
 
     <div class="resizer pc-only" id="resizer" role="separator" aria-orientation="vertical" aria-controls="panel" aria-label="Largeur du volet des circuits" tabindex="0" title="Glisse pour changer la largeur du volet (double-clic : largeur normale)"></div>
@@ -120,7 +121,7 @@
           <button type="button" role="tab" id="tab-box" data-tab="box" aria-selected="true">Boîte<kbd>1</kbd></button>
           <button type="button" role="tab" id="tab-tab" data-tab="tab" aria-selected="false">Tableau<kbd>2</kbd></button>
           <button type="button" role="tab" id="tab-uni" data-tab="uni" aria-selected="false">Unifilaire<kbd>3</kbd></button>
-          <button type="button" role="tab" id="tab-list" data-tab="list" aria-selected="false"><span class="tl">Fils et longueurs</span><span class="ts">Fils</span><kbd>4</kbd></button>
+          <button type="button" role="tab" id="tab-list" data-tab="list" aria-selected="false"><span class="tl">Matériel</span><span class="ts">Matériel</span><kbd>4</kbd></button>
           <button type="button" role="tab" id="tab-labels" data-tab="labels" aria-selected="false">Étiquettes<kbd>5</kbd></button>
           <button type="button" role="tab" id="tab-steps" data-tab="steps" aria-selected="false">Pas à pas<kbd>6</kbd></button>
           <button type="button" role="tab" id="tab-quiz" data-tab="quiz" aria-selected="false">Entraînement<kbd>7</kbd></button>
@@ -141,7 +142,8 @@
           <button type="button" data-exp="labels" hidden>PDF des étiquettes (taille réelle)<small>À imprimer à 100 %, sans ajuster à la page</small></button>
           <button type="button" data-exp="png">PNG<small>Image du plan affiché</small></button>
           <button type="button" data-exp="svg">SVG<small>Plan affiché, net à toutes les tailles</small></button>
-          <button type="button" data-exp="pdf">PDF complet<small>Boîtes, tableau, unifilaire et liste des fils</small></button>
+          <button type="button" data-exp="pdf">PDF complet<small>Boîtes, tableau, unifilaire, fils et liste de courses</small></button>
+          <button type="button" data-exp="shop" hidden>Liste de courses<small>Ce qu’il faut acheter, avec les références (tableur CSV)</small></button>
           <button type="button" data-exp="csv">CSV des fils<small>Liste des fils pour un tableur</small></button>
         </div>
       </div>
@@ -158,7 +160,7 @@
           <button type="button" data-zoom="one" title="Taille réelle">100 %</button>
         </div>
       </div>
-      <p class="foot pc-only"><span>Plans pour l'apprentissage, à faire valider par ton formateur : vérifie les repères des bornes sur tes appareils et câble toujours hors tension.</span><span>ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a></span></p>
+      <p class="foot pc-only"><span>Plans pour l'apprentissage, à faire valider par ton formateur : vérifie les repères des bornes sur tes appareils et câble toujours hors tension.</span><span>ElectroPlan, un outil <a href="https://electrolearn.netlify.app/" target="_blank" rel="noopener">ElectroLearn</a> · <button type="button" class="linkbtn" data-do="legal">Mentions légales</button></span></p>
     </main>
 
     <button type="button" class="fab m-only" id="fab-add" data-do="add" aria-haspopup="dialog" aria-controls="ov-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter un circuit</button>
@@ -167,7 +169,7 @@
   <nav class="mnav m-only" aria-label="Sections">
     <button type="button" data-view="edit"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-zap"/></svg></span><span class="nl">Circuits</span><span class="dot" id="nav-dot" hidden></span></button>
     <button type="button" data-view="plans"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-plans"/></svg></span><span class="nl">Plans</span></button>
-    <button type="button" data-view="list"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-cable"/></svg></span><span class="nl">Fils</span></button>
+    <button type="button" data-view="list"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg></span><span class="nl">Matériel</span></button>
     <button type="button" data-view="steps"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-checks"/></svg></span><span class="nl">Pas à pas</span></button>
     <button type="button" data-view="quiz"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg></span><span class="nl">Exercices</span></button>
     <button type="button" data-view="parts"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span><span class="nl">Appareils</span></button>
@@ -196,7 +198,7 @@
     <div class="ov-body menu">
       <button type="button" class="mi m-only" data-do="gen"><svg class="i" aria-hidden="true"><use href="#i-house"/></svg><span>Logement selon la norme…</span><small>Les circuits minimum d'un T1 à un T5</small></button>
       <button type="button" class="mi m-only" data-do="saved"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg><span>Mes installations…</span><small>Enregistrer, ouvrir une autre installation</small></button>
-      <button type="button" class="mi m-only" id="mi-dl" data-do="dl" hidden><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span>Télécharger…</span><small>PDF, image ou liste des fils</small></button>
+      <button type="button" class="mi m-only" id="mi-dl" data-do="dl" hidden><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span>Télécharger…</span><small>PDF, image, liste des fils ou de courses</small></button>
       <button type="button" class="mi" id="btn-sample"><svg class="i" aria-hidden="true"><use href="#i-book"/></svg><span>Charger l'exemple de maquette</span></button>
       <div class="mi-group">
         <span id="uimode-l">Interface</span>
@@ -208,6 +210,7 @@
         <p class="hint" id="uimode-hint"></p>
       </div>
       <a class="mi brand-link" href="https://electrolearn.netlify.app/" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="#i-sparkles"/></svg><span>Ouvrir ElectroLearn</span><svg class="i ext" aria-hidden="true"><use href="#i-ext"/></svg><small>Cours, exercices et contrôles</small></a>
+      <button type="button" class="mi" data-do="legal"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>Mentions légales et confidentialité</span><small>Éditeur, hébergeur, données, marques</small></button>
       <button type="button" class="mi pc-only" data-do="keys"><svg class="i" aria-hidden="true"><use href="#i-keyboard"/></svg><span>Raccourcis clavier</span><kbd>?</kbd></button>
       <button type="button" class="mi danger" id="btn-clear"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg><span class="t">Tout effacer</span></button>
     </div>
@@ -231,7 +234,7 @@
     <div class="ov-head"><h2 id="ov-keys-t">Raccourcis clavier</h2><button type="button" class="ibtn" data-close aria-label="Fermer"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <div class="ov-body">
       <dl class="keys">
-        <dt><kbd>1</kbd> à <kbd>8</kbd></dt><dd>Changer d'onglet : Boîte, Tableau, Unifilaire, Fils, Étiquettes, Pas à pas, Entraînement, Appareils</dd>
+        <dt><kbd>1</kbd> à <kbd>8</kbd></dt><dd>Changer d'onglet : Boîte, Tableau, Unifilaire, Matériel (liste de courses, fils), Étiquettes, Pas à pas, Entraînement, Appareils</dd>
         <dt><kbd>/</kbd></dt><dd>Chercher un appareil (référence ou nom)</dd>
         <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoomer, dézoomer le plan</dd>
         <dt><kbd>0</kbd></dt><dd>Ajuster le plan à la largeur</dd>
@@ -243,6 +246,32 @@
         <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Enregistrer l'installation</dd>
         <dt><kbd>Échap</kbd></dt><dd>Fermer une fenêtre</dd>
       </dl>
+    </div>
+  </div>
+
+  <div class="ov dlg tall" id="ov-legal" role="dialog" aria-labelledby="ov-legal-t" tabindex="-1" hidden>
+    <div class="ov-head"><h2 id="ov-legal-t">Mentions légales et confidentialité</h2><button type="button" class="ibtn" data-close aria-label="Fermer"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="ov-body legal">
+      <p class="hint" id="legal-claude" hidden>Tu regardes la version privée d’ElectroPlan dans Claude : elle est servie par claude.ai (Anthropic). Tes installations et ton avancement sont gardés dans ton compte Claude, et la recherche en direct envoie la référence cherchée à Claude, avec ton compte. Dans cette version, les polices viennent de Google Fonts et le module PDF de cdnjs (Cloudflare). Les mentions ci-dessous concernent le site public.</p>
+      <section><h3>Éditeur</h3>
+        <p>ElectroPlan est un site personnel, gratuit et non commercial, publié à titre non professionnel par l’utilisateur GitHub « kakokix ». C’est un outil de la famille ElectroLearn.</p>
+        <p>La loi pour la confiance dans l’économie numérique (LCEN, article 1-1) permet à un éditeur non professionnel de ne publier que l’identité et l’adresse de son hébergeur.</p>
+        <p>Contact : par la <a href="https://github.com/kakokix/ElectroPlan" target="_blank" rel="noopener">page du projet sur GitHub</a>.</p></section>
+      <section><h3>Hébergeur</h3>
+        <p>GitHub, Inc. (service GitHub Pages), 88 Colin P Kelly Jr Street, San Francisco, CA 94107, États-Unis. Téléphone : +1 877 448 4820. <a href="https://github.com" target="_blank" rel="noopener">github.com</a></p></section>
+      <section><h3>Données personnelles et cookies</h3>
+        <p>ElectroPlan ne demande ni compte, ni nom, ni adresse e-mail. Il n’utilise ni cookie, ni mesure d’audience, ni publicité.</p>
+        <p>Tes installations, ton avancement et tes réglages d’affichage sont gardés dans ton navigateur (stockage local), sur ton appareil seulement : ils ne sont envoyés à personne. Ce stockage sert uniquement à ce que tu demandes au site ; il ne demande donc pas de consentement (article 82 de la loi Informatique et Libertés). Pour l’effacer : menu « Plus d’actions », puis « Tout effacer », ou supprime les données du site dans ton navigateur.</p>
+        <p>Les polices et le module PDF sont servis par le site lui-même : aucune autre société n’est contactée quand tu l’utilises. Comme tout hébergeur, GitHub reçoit l’adresse IP des visiteurs pour faire fonctionner et protéger le service : voir sa <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">déclaration de confidentialité</a>. Le lien « Chercher la notice » ouvre Google, seulement si tu cliques dessus.</p></section>
+      <section><h3>Marques et références</h3>
+        <p>Les marques et noms de produits cités (Legrand, Schneider Electric, Hager, WAGO, Somfy…) appartiennent à leurs propriétaires ; ils servent seulement à désigner les produits. ElectroPlan n’est lié à aucun fabricant ni distributeur et ne vend rien.</p>
+        <p>Les références et leurs désignations ont été relevées sur les sites des fabricants et des distributeurs : chaque fiche donne le lien de sa source. Elles peuvent changer : vérifie toujours la notice de l’appareil.</p></section>
+      <section><h3>Norme et responsabilité</h3>
+        <p>ElectroPlan est un outil d’apprentissage. Il s’appuie sur la norme NF C 15-100, éditée par AFNOR (dont il ne reproduit pas le texte), et sur des guides publics de fabricants. Il ne remplace ni la norme, ni la notice des appareils, ni l’avis d’un professionnel.</p>
+        <p>Travaille toujours hors tension et fais valider ton travail par ton formateur. En entreprise, les travaux électriques demandent une habilitation électrique.</p></section>
+      <section><h3>Licences</h3>
+        <p>Polices DM Sans, Space Grotesk, Barlow et IBM Plex Mono : licence SIL Open Font License 1.1. Module PDF jsPDF : licence MIT. Les textes des licences sont dans le <a href="https://github.com/kakokix/ElectroPlan" target="_blank" rel="noopener">dépôt du site</a>.</p></section>
+      <p class="hint">Dernière mise à jour : 9 octobre 2026.</p>
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

@@ -1,0 +1,889 @@
+<script>
+/* ============================================================ ElectroPlan — base d'appareillage
+   Fiches par type d'appareil (fonctionnement, bornes, câblage, réglages, limites, norme, erreurs fréquentes)
+   et vraies références relevées chez les fabricants et les grands distributeurs (octobre 2026).
+   Chaque référence garde le lien de la page où elle a été vue. Les repères des bornes changent d'une marque
+   à l'autre : quand ils ne sont pas confirmés, la fiche le dit et renvoie à la notice. */
+var APPDB_DATE = 'octobre 2026';
+var APP_CATS = [['tab', 'Tableau électrique'], ['mur', 'Appareillage mural'], ['cnx', 'Raccordement'], ['eqp', 'Appareils reliés']];
+
+// raccourcis des liens (gardent le fichier léger)
+var URLS = { '@123/': 'https://www.123elec.com/', '@lg/': 'https://www.legrand.fr/', '@lgp/': 'https://www.legrand.fr/pro/catalogue/', '@lga/': 'https://assets.legrand.com/pim/',
+             '@se/': 'https://www.se.com/fr/fr/product/', '@hg/': 'https://hager.com/fr/catalogue/produits/', '@hgd/': 'https://hager.com/fr/catalogue/catalog/product/download/id/',
+             '@dm/': 'https://www.domomat.com/', '@wg/': 'https://www.wago.com/fr/', '@of/': 'https://www.ottofischer.ch/pim/' };
+function expandUrl(u) { for (var k in URLS) if (u.indexOf(k) === 0) return URLS[k] + u.slice(k.length); return u; }
+
+/* ------------------------------------------------------------ fiches par type
+   draw : dessin des bornes. body = mod (module de tableau), wall (mécanisme mural), dev (appareil), wago.
+   top / bot : [repère, couleur du fil, où il va]. Couleurs : R phase, B neutre, GY terre, K, M, O, V, G autres. */
+var APP_TYPES = {
+  /* ---------------------------------------------------------- tableau */
+  tl: { cat: 'tab', name: 'Télérupteur', mods: '1 module', alias: 'telerupteur tl ka relais impulsionnel bistable telerupteur silencieux electronique',
+    how: 'Relais « bistable » : chaque appui sur un bouton-poussoir envoie une impulsion à la bobine, qui fait basculer le contact (ouvert ↔ fermé) et le garde ainsi. On peut mettre autant de boutons-poussoirs en parallèle qu’on veut pour commander le même éclairage. Les modèles silencieux (électroniques) demandent souvent un neutre.',
+    terms: [['A1', 'bobine : retour des boutons-poussoirs'], ['A2', 'bobine : neutre'], ['1', 'contact : arrivée de la phase (sortie du disjoncteur)'], ['2', 'contact : départ vers les lampes (retour lampes)'], ['3 / 4', '2e contact, seulement sur un modèle 2 pôles']],
+    draw: { body: 'mod', top: [['1', 'R', 'phase (sortie du disjoncteur)']], bot: [['2', 'K', 'vers les lampes'], ['A1', 'O', 'retour des boutons-poussoirs'], ['A2', 'B', 'neutre']] },
+    wiring: ['Disjoncteur 16 A (fils 1,5 mm²) : sa sortie L va à la borne 1 du télérupteur et à une borne de chaque bouton-poussoir.',
+             'L’autre borne de chaque bouton-poussoir revient sur A1 (retour BP). Tous les boutons sont en parallèle.',
+             'A2 va au neutre (sortie N du disjoncteur).',
+             'La borne 2 part vers les lampes (retour lampes). Le neutre et la terre vont directement aux lampes.'],
+    settings: 'Manette de forçage marche/arrêt sur certains modèles (ex. Acti9 iTL). Le Legrand 412401 est temporisé (5 à 60 min, avec préavis d’extinction).',
+    limits: '16 A, 1 module (18 mm), bobine 230 V (existe en 12, 24, 48 V). Boutons lumineux : courant limité (ex. 3 mA au total sur l’iTL Schneider ; chez Legrand, un compensateur 412439 au-delà de 3 mA).',
+    norm: 'Éclairage : 8 points lumineux au plus par circuit, fils 1,5 mm² protégés par 16 A.',
+    errors: ['Mettre la phase directement sur A1 : la bobine reste alimentée, le télérupteur ne réagit plus et chauffe.', 'Ajouter des boutons lumineux sans vérifier le courant admis : l’éclairage peut rester allumé ou clignoter.', 'Prendre le neutre pour les BP sur un modèle silencieux qui ne l’accepte pas (ex. Legrand 412400).'],
+    add: { type: 'tl' }, src: ['@123/legrand-cx3-telerupteur-16a.html', '@hg/epn510-telerupteur-1f-230v', '@se/A9C30812/acti9-itl-t%C3%A9l%C3%A9rupteur-16a-2no-230-240vca-110vcc-5060hz'] },
+  mn: { cat: 'tab', name: 'Minuterie', mods: '1 module', alias: 'minuterie cage escalier kt temporisation preavis extinction 3 fils 4 fils',
+    how: 'Un appui sur un bouton-poussoir allume l’éclairage pendant la durée réglée, puis il s’éteint tout seul. Un nouvel appui relance la temporisation. Le préavis d’extinction prévient avant la coupure (baisse ou clignotement) pour ne laisser personne dans le noir.',
+    terms: [['L', 'alimentation : phase'], ['N', 'alimentation : neutre'], ['entrée BP', 'retour des boutons-poussoirs (montage 4 fils)'], ['sortie (S)', 'départ vers les lampes']],
+    termsNote: 'Les repères imprimés changent d’une marque à l’autre : suis toujours le schéma dessiné sur le module.',
+    draw: { body: 'mod', top: [['L', 'R', 'phase']], bot: [['S', 'K', 'sortie vers les lampes'], ['BP', 'O', 'retour des boutons-poussoirs'], ['N', 'B', 'neutre']] },
+    wiring: ['Montage 4 fils (installation neuve) : la phase va à la minuterie (L) et à une borne de chaque bouton-poussoir.', 'Le retour des boutons-poussoirs arrive sur l’entrée BP de la minuterie.', 'La sortie de la minuterie part vers les lampes ; le neutre va à la minuterie et aux lampes, la terre directement aux lampes.', 'Montage 3 fils (ancien) : les boutons sont reliés au neutre ; possible seulement si la minuterie le permet (détection automatique ou sélecteur 3/4 fils).'],
+    settings: 'Molette de durée (ex. 0,5 à 10 min sur Legrand 412602, 30 s à 10 min sur Hager EMN001), marche forcée, sélecteur 3/4 fils sur certains modèles, préavis sur les multifonctions.',
+    limits: '16 A, 1 module. Boutons lumineux en nombre limité (ex. 50 boutons à néon de 1 mA au plus sur Legrand 412602).',
+    norm: 'Éclairage : 8 points lumineux au plus par circuit, 1,5 mm² sur 16 A.',
+    errors: ['Câbler en 3 fils une minuterie réglée en 4 fils (ou l’inverse) : elle ne réagit pas ou reste allumée.', 'Oublier le neutre de la minuterie : elle ne s’allume pas.'],
+    add: { type: 'mn' }, src: ['@lgp/minuterie-modulaire-230v-50hz-et-60hz-sortie-16a-250v-1-module', '@lg/questions-frequentes/comment-brancher-une-minuterie-sur-un-tableau-electrique', '@hgd/EMN001'] },
+  km: { cat: 'tab', name: 'Contacteur jour/nuit (heures creuses)', mods: '1 module (2 pôles)', alias: 'contacteur heures creuses hc jour nuit km chauffe eau ballon tarif linky c1 c2 auto 0 1',
+    how: 'Contacteur dont la bobine est commandée par le contact heures creuses du compteur (C1-C2 sur le Linky) : ses pôles ne se ferment qu’en heures creuses pour alimenter le chauffe-eau. Sur AUTO il suit le compteur ; la manette permet de forcer la marche (I) ou de l’arrêter (0).',
+    terms: [['A1', 'bobine : retour de la commande (C2 du compteur)'], ['A2', 'bobine : neutre'], ['1 → 2', '1er pôle : phase vers le chauffe-eau'], ['3 → 4', '2e pôle : neutre vers le chauffe-eau']],
+    draw: { body: 'mod', top: [['1', 'R', 'phase (disjoncteur 20 A)'], ['3', 'B', 'neutre (disjoncteur 20 A)']], bot: [['2', 'R', 'phase vers le chauffe-eau'], ['4', 'B', 'neutre vers le chauffe-eau'], ['A1', 'K', 'retour de C2 (compteur)'], ['A2', 'B', 'neutre (disjoncteur 2 A)']] },
+    wiring: ['Commande : phase d’un disjoncteur 2 A (fils 1,5 mm²) → borne C1 du compteur ; C2 → A1 du contacteur ; A2 → neutre du disjoncteur 2 A. Le compteur ne fournit aucune tension sur C1-C2 : c’est un contact sec.', 'Puissance : sortie L du disjoncteur 20 A (2,5 mm²) → borne 1, sortie N → borne 3.', 'Bornes 2 et 4 → chauffe-eau (sur la platine de son thermostat), la terre en direct.', 'Manette sur AUTO en marche normale.'],
+    settings: 'Manette AUTO / I / 0. Sur le Legrand 412501, I = marche forcée qui revient seule sur AUTO, 0 = hors service. Même logique chez Hager (ETC225).',
+    limits: '2 pôles 25 A (AC-7a), bobine 230 V, 1 module (Legrand 412501, Hager ETC225). Circuit de commande (asservissement tarifaire) : 1,5 mm² protégé par 2 A.',
+    norm: 'Chauffe-eau : circuit spécialisé en 2,5 mm² protégé par 20 A. Circuit d’asservissement tarifaire : 1,5 mm², 2 A au plus (guide Hager NF C 15-100).',
+    errors: ['Relier C1 directement à A1 sans phase : le contact du compteur ne donne pas de tension, le contacteur ne colle jamais.', 'Laisser la manette sur 0 : le chauffe-eau n’est jamais alimenté.'],
+    add: { type: 'hc', params: { load: 'ce', cmd: 'edf' } }, src: ['@123/legrand-cx3-contacteur-jour-nuit-25a.html', '@hg/etc225-contacteur-jn-25a-2f-230v', '@lga/NP-FT-GT/F01331FR-04.pdf'] },
+  kmg: { cat: 'tab', name: 'Contacteur de puissance', mods: '1 module', alias: 'contacteur puissance km relais modulaire bobine a1 a2 no nf ict',
+    how: 'Interrupteur télécommandé : quand sa bobine A1-A2 est alimentée, ses pôles se ferment (contacts NO) ou s’ouvrent (NF). Ils reviennent au repos dès qu’elle ne l’est plus. Il sert à commander une grosse charge avec un petit organe (interrupteur, horloge, thermostat, délesteur).',
+    terms: [['A1 / A2', 'bobine (commande)'], ['1 → 2', '1er pôle'], ['3 → 4', '2e pôle']],
+    draw: { body: 'mod', top: [['1', 'R', 'phase (disjoncteur)'], ['3', 'B', 'neutre (disjoncteur)']], bot: [['2', 'R', 'vers l’appareil'], ['4', 'B', 'vers l’appareil'], ['A1', 'K', 'retour de l’organe de commande'], ['A2', 'B', 'neutre']] },
+    wiring: ['Commande : phase → organe de commande (interrupteur, horloge…) → A1 ; A2 → neutre.', 'Puissance : L → 1, N → 3 ; bornes 2 et 4 → appareil.'],
+    settings: 'Sans commande manuelle (ex. Legrand 412523) ou avec marche forcée (412558).',
+    limits: '2 pôles 25 A (AC-7a), 1 module, bobine 230 V (existe en 24 V). Notice Legrand : « Commande : A1 et A2 », « Puissance : de 1 à 6 » (3 pôles).',
+    errors: ['Confondre contacteur et télérupteur : le contacteur ne reste fermé que tant que sa bobine est alimentée.'],
+    src: ['@123/marques/legrand/telerupteurs-et-autres-commandes.html', '@hgd/ESC225', '@lga/NP-FT-GT/F00964FR.01.pdf'] },
+  hz: { cat: 'tab', name: 'Interrupteur horaire (horloge)', mods: '1 à 3 modules', alias: 'horloge interrupteur horaire programmateur minuterie journaliere hebdomadaire digital analogique segments ih ihp',
+    how: 'Il allume et éteint à heures fixes. Analogique : un cadran 24 h (ou 7 jours) tourne et ses segments enfoncés ferment le contact (pas de 15 min). Digital : programmes journaliers ou hebdomadaires, parfois astronomiques. Une réserve de marche garde l’heure pendant les coupures.',
+    terms: [['L', 'alimentation : phase'], ['N', 'alimentation : neutre'], ['contact', 'sortie 16 A : contact NO, ou inverseur selon le modèle']],
+    termsNote: 'Le marquage du contact (1-2, 1-2-4…) dépend du modèle : regarde le schéma imprimé sur l’appareil.',
+    draw: { body: 'mod', top: [['L', 'R', 'phase'], ['1', 'R', 'phase (entrée du contact)'], ['N', 'B', 'neutre']], bot: [['2', 'K', 'vers l’éclairage (ou A1 d’un contacteur)']] },
+    wiring: ['Alimente le module (L, N) depuis le disjoncteur du circuit.', 'Phase → entrée du contact ; sortie du contact → lampes (16 A au plus) ou bobine A1 d’un contacteur pour une grosse charge.', 'Neutre et terre directs aux lampes.'],
+    settings: 'Segments imperdables sur les analogiques ; sélecteur marche forcée / AUTO / arrêt (ex. Legrand 412823) ; digitaux : touches de programmation, mode vacances, forçage.',
+    limits: '16 A ; 1 module (analogique, 1 contact NO) à 2-3 modules (inverseur). Charge LED limitée (ex. 300 W sur Hager EHN011).',
+    add: { type: 'ex', params: { cde: 'hor' } }, src: ['@lgp/interrupteur-horaire-analogique-modulaire-programmable-manuel-journalier-cadran-vertical-avec-reserve-de-marche', '@hgd/EGN103', 'https://www.batirmoinscher.com/media/pdf/4/1/412631.pdf'] },
+  cr: { cat: 'tab', name: 'Interrupteur crépusculaire', mods: '1 à 2 modules', alias: 'crepusculaire cellule photoelectrique lux nuit eclairage exterieur ic100 ic2000',
+    how: 'Une cellule placée dehors mesure la lumière : sous le seuil réglé (en lux), le module ferme sa sortie et allume l’éclairage ; au-dessus, il l’ouvre. Une temporisation évite les déclenchements dus aux phares ou aux nuages.',
+    terms: [['L / N', 'alimentation'], ['sortie', 'contact vers l’éclairage (ou A1 d’un contacteur)'], ['cellule', 'bornes de la cellule déportée (voir la notice)']],
+    draw: { body: 'mod', top: [['L', 'R', 'phase'], ['1', 'R', 'phase (entrée du contact)'], ['N', 'B', 'neutre']], bot: [['2', 'K', 'vers l’éclairage'], ['cel.', 'G', 'câble de la cellule']] },
+    wiring: ['Alimente le module (L, N).', 'Phase → contact → éclairage extérieur (ou bobine d’un contacteur).', 'Raccorde la cellule selon la notice (Hager EEN100 : jusqu’à 100 m de câble).', 'Place la cellule dehors, à l’abri de l’éclairage qu’elle commande, sinon il s’allume et s’éteint sans arrêt.'],
+    settings: 'Seuil réglable (2 à 100 000 lux sur Legrand 412623, 5 à 2 000 lux sur Hager EEN100) et temporisation. Le Legrand 412626 a aussi une programmation horaire.',
+    limits: '16 A (10 A sur Hager EEN100), 1 module (412626 : 2). Cellule IP65 (Legrand 412860) ou IP55.',
+    add: { type: 'ex', params: { cde: 'crep' } }, src: ['@lgp/interrupteur-crepusculaire-modulaire-standard-sortie-16a-250v-livre-avec-cellule-photoelectrique-1-module', 'https://hager.com/intl-fr/catalogue/informations/een100-inter-crep-1-voie-1m-cellule-saillie'] },
+  del: { cat: 'tab', name: 'Délesteur', mods: '1 à 5 modules', alias: 'delesteur delestage tore ti abonnement puissance chauffage cascade cyclique',
+    how: 'Un tore (transformateur de courant) sur l’arrivée mesure le courant total. Avant que l’abonnement soit dépassé, le délesteur coupe un moment les circuits non prioritaires (chauffage, chauffe-eau), puis les remet quand la consommation baisse : le disjoncteur de branchement ne saute pas.',
+    terms: [['L / N', 'alimentation'], ['tore (TI)', 'mesure du courant d’arrivée'], ['voies 1, 2, 3…', 'contacts de délestage, ou sorties fil pilote']],
+    draw: { body: 'mod', top: [['L', 'R', 'phase'], ['N', 'B', 'neutre'], ['TI', 'G', 'tore sur l’arrivée']], bot: [['V1', 'K', 'voie 1 (circuit délesté)'], ['V2', 'K', 'voie 2'], ['V3', 'K', 'voie 3']] },
+    wiring: ['Tore sur l’arrivée générale de l’installation.', 'Module alimenté par son disjoncteur.', 'Chaque voie commande la bobine du contacteur d’un circuit non prioritaire, ou envoie l’ordre « arrêt » par le fil pilote.'],
+    settings: 'Seuil (0 à 30 A sur Legrand 412020, 15 à 90 A sur Hager 60060), ordre de priorité, délestage en cascade ou cyclique.',
+    limits: 'Legrand 412020 : 1 circuit de 16 A, 2 modules. Legrand 412021 : 3 circuits, 5 modules. Hager 60060 : 3 voies, 3 modules.',
+    src: ['@lgp/delesteur-modulaire-monophase-1-circuit-deleste-16a-maximum-seuil-de-delestage-reglable-de-0a-a-30a-2-modules', '@hgd/60060', '@lga/NP-FT-GT/F03109FR-07.pdf'] },
+  tv: { cat: 'tab', name: 'Télévariateur', mods: '1 à 5 modules', alias: 'televariateur variateur modulaire bouton poussoir led dimmable std400led',
+    how: 'Variateur placé au tableau et piloté par des boutons-poussoirs : appui bref = marche/arrêt, appui long = variation, avec mémoire du niveau. Les modèles universels reconnaissent la charge (LED, halogène…).',
+    terms: [['alimentation', 'phase (et neutre selon le modèle)'], ['commande', 'entrée des boutons-poussoirs'], ['sortie', 'vers les lampes']],
+    termsNote: 'Repères selon le modèle : suis la notice.',
+    draw: { body: 'mod', top: [['L', 'R', 'phase'], ['N', 'B', 'neutre']], bot: [['BP', 'O', 'retour des boutons-poussoirs'], ['sortie', 'K', 'vers les lampes']] },
+    wiring: ['Phase → module et boutons-poussoirs ; retour des boutons → entrée de commande ; sortie → lampes ; neutre aux lampes.'],
+    limits: 'Ex. Legrand 002671 : LED 3–75 W ; Hager EVN004 : 500 W (LED 100 W) ; Schneider CCTDD20016 : 400 W (LED 60 W). Lampes « dimmables » uniquement.',
+    errors: ['Brancher des lampes LED non dimmables : elles clignotent ou ne varient pas.'],
+    src: ['@lga/DOCUMENT/CB2022_2023FR_lr-p224.pdf', '@hgd/EVN004'] },
+  fpm: { cat: 'tab', name: 'Fil pilote au tableau', mods: '', alias: 'fil pilote programmateur gestionnaire energie confort eco hors gel arret delestage coupure auxiliaire',
+    how: 'Le fil pilote (fil noir des radiateurs) reçoit un signal mesuré par rapport au neutre : rien = Confort ; 230 V = Éco ; demi-alternance négative = Hors-gel ; demi-alternance positive = Arrêt (délestage) ; 230 V pendant 3 s ou 7 s toutes les 5 min = Confort −1 ou −2. Un programmateur, un gestionnaire d’énergie ou un délesteur envoie ces ordres ; chaque radiateur garde son thermostat.',
+    terms: [['L / N', 'alimentation du programmateur'], ['FP', 'sortie fil pilote, vers la borne fil pilote des radiateurs']],
+    draw: { body: 'mod', top: [['N', 'B', 'neutre (disjoncteur 2 A)'], ['L', 'R', 'phase (disjoncteur 2 A)']], bot: [['FP', 'K', 'vers le fil pilote des radiateurs']] },
+    wiring: ['Le programmateur est sur son propre disjoncteur 2 A (fils 1,5 mm²).', 'Sa sortie fil pilote va à la borne fil pilote de chaque radiateur de la zone.', 'Toute la zone, fil pilote compris, reste sous le même différentiel 30 mA que ses radiateurs.', 'Avant d’ouvrir un radiateur, coupe aussi le disjoncteur du programmateur, sinon le fil pilote reste sous tension. Il existe des coupures auxiliaires de fil pilote associées au disjoncteur (ex. Legrand 406258).'],
+    norm: 'Circuit d’asservissement tarifaire, fil pilote, gestionnaire d’énergie : 1,5 mm², 2 A au plus. « L’ensemble des circuits de chauffage, y compris le fil pilote, est placé par zone de pilotage en aval d’un même DDR 30 mA » (guide Hager).',
+    errors: ['Relier le fil pilote à la terre : interdit, le différentiel peut sauter.', 'Laisser le fil pilote sur un autre différentiel que ses radiateurs.'],
+    add: { type: 'ch' }, src: ['https://www.thermor.fr/faq/radiateur/utiliser/qu-est-ce-que-le-fil-pilote-d-un-radiateur-electrique', 'https://assets.sc.hager.com/fr/-/media/project/hagerdeep/france/hager/b2b-france/documentation/docs-solutions/hager_guide-nf-c-15-100_qzd218.pdf'] },
+  son: { cat: 'tab', name: 'Sonnerie modulaire', mods: '1 module', alias: 'sonnerie ronfleur sonnette carillon modulaire 8 12 v 230 v',
+    how: 'Électro-aimant qui frappe un timbre (ou fait vibrer, pour un ronfleur) tant que le bouton de sonnette est appuyé. En 8/12 V, elle est alimentée par un transformateur de sonnerie, ce qui met le bouton extérieur en très basse tension.',
+    terms: [['2 bornes', 'alimentation à travers le bouton de sonnette']],
+    draw: { body: 'mod', bot: [['1', 'V', 'retour du bouton de sonnette'], ['2', 'K', 'borne 0 du transformateur']] },
+    wiring: ['En 8/12 V : borne 12 V (ou 8 V) du transformateur → bouton de sonnette → sonnerie → borne 0 (commun) du transformateur.', 'En 230 V : phase → bouton → sonnerie → neutre.'],
+    limits: '1 module. 8/12 V : 3,6 à 5 VA ; 230 V : 5,5 à 6 VA ; 80 à 85 dB.',
+    norm: 'La sonnette peut être alimentée par un circuit d’éclairage ou par un circuit spécialisé (guide Hager).',
+    add: { type: 'so' }, src: ['@123/marques/legrand/telerupteurs-et-autres-commandes.html', '@hgd/SU212'] },
+  trs: { cat: 'tab', name: 'Transformateur de sonnerie', mods: '2 à 4 modules', alias: 'transformateur sonnerie transfo 8 12 v tbts securite itr',
+    how: 'Transformateur de sécurité qui abaisse le 230 V en 8 V ou 12 V pour une sonnerie ou un carillon. Le circuit du bouton de sonnette est alors en très basse tension.',
+    terms: [['primaire', '230 V : phase et neutre'], ['0', 'commun du secondaire'], ['8 V / 12 V', 'sorties très basse tension']],
+    draw: { body: 'mod', w: 2, top: [['N', 'B', 'neutre 230 V'], ['L', 'R', 'phase 230 V']], bot: [['0', 'K', 'retour de la sonnerie'], ['8 V', 'G', '8 V (si besoin)'], ['12 V', 'O', 'vers le bouton de sonnette']] },
+    wiring: ['Primaire : sur un circuit protégé (éclairage, ou circuit spécialisé).', 'Secondaire : 12 V (ou 8 V) → bouton de sonnette → sonnerie → borne 0.', 'Les fils en 12 V passent dans une gaine à eux, jamais avec des fils en 230 V.'],
+    limits: '8 VA (2 modules) à 24 VA (4 modules). Hager ST303 : protégé contre les courts-circuits, 1 A au plus.',
+    add: { type: 'so' }, src: ['@dm/1361-transformateur-pour-sonneries-8va-legrand-413091.html', '@hgd/ST303', '@se/A9A15216/'] },
+  id: { cat: 'tab', name: 'Interrupteur différentiel 30 mA', mods: '2 modules', alias: 'interrupteur differentiel id ddr 30ma 40a 63a 25a type a ac f hpi si fsi asi',
+    how: 'Un tore compare le courant qui part par la phase et celui qui revient par le neutre. Si une partie s’échappe vers la terre (fuite) et atteint 30 mA, il coupe la phase et le neutre. Il protège les personnes, mais pas contre les surcharges et les courts-circuits : ce sont les disjoncteurs en dessous qui le font.',
+    terms: [['N', 'neutre (à gauche sur Schneider Resi9 et Legrand DNX³)'], ['L', 'phase'], ['T', 'bouton test']],
+    draw: { body: 'mod', w: 2, top: [['N', 'B', 'neutre (arrivée)'], ['L', 'R', 'phase (arrivée)']], bot: [['N', 'B', 'peigne de la rangée'], ['L', 'R', 'peigne de la rangée']] },
+    termsNote: 'Arrivée par le haut ou le bas selon le modèle (Legrand 4116xx : arrivée haute ; Schneider Resi9 XP : alimentation par le bas).',
+    wiring: ['Il est alimenté par le peigne vertical (ou un câble) qui vient du disjoncteur de branchement.', 'Sa sortie alimente le peigne horizontal (phase + neutre) de sa rangée de disjoncteurs.', 'Appuie sur T une fois par mois pour vérifier qu’il déclenche.'],
+    settings: 'Types : AC = défauts alternatifs (circuits ordinaires) · A = en plus, défauts avec composante continue (obligatoire, ou F, pour la plaque et le lave-linge) · F = au moins comme le type A, pour les appareils à variateur de vitesse monophasé (pompe à chaleur, climatisation) ; Legrand l’appelle « type F (ex type Hpi) », Schneider « F-SI » · B = appareils triphasés à redresseur, et recharge de voiture (ou type A/F avec un dispositif de coupure à 6 mA).',
+    limits: '2 modules ; 25, 40 ou 63 A.',
+    norm: 'Au moins 2 interrupteurs différentiels 30 mA par logement, dont au moins 1 de type A ; 8 circuits au plus par différentiel ; éclairage et prises répartis sur au moins 2 différentiels. Type A (ou F) obligatoire pour la plaque de cuisson et le lave-linge. Calibre : au moins égal à celui du disjoncteur de branchement, ou au moins égal à la somme des calibres du chauffage, du chauffe-eau et de la recharge + la moitié de celle des autres circuits (exemple Legrand : 20 A de convecteurs, 16 A de prises, 10 A d’éclairage → 33 A → ID 40 A).',
+    errors: ['Croire qu’un ID protège les fils : il ne remplace pas les disjoncteurs.', 'Mettre plus de 8 circuits sur un même ID.'],
+    src: ['@lgp/interrupteur-differentiel-dx3-id-arrivee-haute-et-depart-haut-a-vis-2p-230v-40a-typea-30ma-2-modules', 'https://assets.legrand.com/editorial/legrandfr/outils/documentations-et-guides/legrand-guide-norme-nf-c-15-100.pdf', '@hg/cdc742f-inter-diff-2p-40a-30ma-ac-borne-dec'] },
+  dj: { cat: 'tab', name: 'Disjoncteur divisionnaire (phase + neutre)', mods: '1 module', alias: 'disjoncteur divisionnaire dj phase neutre 1p+n courbe c 2a 10a 16a 20a 25a 32a dnx3 resi9 mfn',
+    how: 'Il protège les fils de son circuit : un bilame coupe en cas de surcharge (déclencheur thermique), un électroaimant coupe en cas de court-circuit (déclencheur magnétique ; courbe C : 5 à 10 fois le calibre). Il coupe aussi le neutre, pour le sectionnement.',
+    terms: [['N (haut)', 'arrivée du neutre par le peigne'], ['L (haut)', 'arrivée de la phase par le peigne'], ['N (bas)', 'départ du neutre du circuit'], ['L (bas)', 'départ de la phase du circuit']],
+    draw: { body: 'mod', top: [['N', 'B', 'peigne (neutre)'], ['L', 'R', 'peigne (phase)']], bot: [['N', 'B', 'neutre du circuit'], ['L', 'R', 'phase du circuit']] },
+    wiring: ['Haut : peigne horizontal de la rangée, sous l’interrupteur différentiel.', 'Bas : fils du circuit, de la section qui va avec le calibre.', 'Pas de repiquage d’un disjoncteur à l’autre (notice Legrand) : passe par le peigne.'],
+    limits: '1 module (17,5 à 18 mm). Pouvoir de coupure 3 kA (Hager MF, Schneider Resi9) ou 4,5 kA (Legrand DNX³ 4500, Hager MJT, Schneider iDT40T).',
+    norm: 'Circuits courants du logement, protégés par disjoncteur : 1,5 mm² → 16 A ; 2,5 mm² → 20 A ; 4 mm² → 25 A ; 6 mm² → 32 A ; 10 mm² → 40 A (le plancher chauffant a son propre tableau). « Disjoncteur obligatoire → coupe-circuit interdit » (guide Legrand 2024).',
+    src: ['@lgp/disjoncteur-phaseneutre-dnx34500-6ka-arrivee-et-sortie-borne-a-vis-1pn-230v-16a-courbe-c-1-module', '@lga/NP-FT-GT/F04285FR-01.pdf', '@se/R9PFC616/', '@hg/mfn716-disjoncteur-1pn-3ka-c-16a-1m'] },
+  dd: { cat: 'tab', name: 'Disjoncteur différentiel', mods: '2 modules', alias: 'disjoncteur differentiel dd 30 ma phase neutre',
+    how: 'Un disjoncteur et un différentiel 30 mA dans le même boîtier : il protège le circuit contre les surcharges, les courts-circuits et les fuites à la terre. Pratique pour un circuit qui doit avoir son propre différentiel (congélateur, recharge de voiture).',
+    terms: [['N / L (haut)', 'arrivée'], ['N / L (bas)', 'départ du circuit'], ['T', 'bouton test']],
+    draw: { body: 'mod', w: 2, top: [['N', 'B', 'neutre (arrivée)'], ['L', 'R', 'phase (arrivée)']], bot: [['N', 'B', 'neutre du circuit'], ['L', 'R', 'phase du circuit']] },
+    wiring: ['Comme un disjoncteur : arrivée par le peigne, départ vers le circuit.'],
+    norm: 'Congélateur : « il convient de prévoir un circuit spécialisé soit protégé par un DDR 30 mA de préférence à immunité renforcée spécifique à ce circuit […], soit alimenté par un transformateur de séparation » (guide Hager).',
+    src: ['@123/gamme-materiel-electrique/disjoncteurs-differentiels/disjoncteurs-differentiels-legrand.html', '@se/R9PDCF10/'] },
+  agcp: { cat: 'tab', name: 'Disjoncteur de branchement (AGCP)', mods: '4 modules', alias: 'disjoncteur de branchement agcp abonne 500 ma selectif s 15 30 45 60 a enedis linky edf',
+    how: 'Disjoncteur différentiel 500 mA placé en tête de l’installation, avec le compteur. Il coupe et sectionne toute l’installation et la protège contre les surintensités. Sa version sélective (retardée) laisse les différentiels 30 mA déclencher en premier. Les anciens disjoncteurs d’abonné avaient un calibre réglé selon l’abonnement (15/30/45 A…).',
+    terms: [['amont', 'arrivée du compteur'], ['aval', 'départ vers le tableau (interrupteurs différentiels)']],
+    draw: { body: 'mod', w: 4, top: [['N', 'B', 'du compteur'], ['L', 'R', 'du compteur']], bot: [['N', 'B', 'vers le tableau'], ['L', 'R', 'vers le tableau']] },
+    wiring: ['Amont : compteur. Aval : parafoudre éventuel et peigne vertical des interrupteurs différentiels.'],
+    settings: 'Calibre réglable (15/30/45 A sur Schneider R9FS645) ; test du différentiel ; cadenassable. Réglage réservé à du personnel qualifié.',
+    norm: 'Guide Legrand 2024 : le disjoncteur de branchement monocalibre 60 A, compatible Linky, « remplace les disjoncteurs d’abonnés 30/45/60 A et répond ainsi à tous les abonnements ». Il est sur le panneau de contrôle, dans la gaine technique logement (GTL), avec le compteur.',
+    src: ['https://www.legrand.fr/catalogue/disjoncteur-general/disjoncteur-de-branchement-enedis-tarif-bleu-500ma-selectif-15a-ou-30a-ou-45a', '@se/R9FS645/', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'] },
+  pf: { cat: 'tab', name: 'Parafoudre', mods: '2 modules', alias: 'parafoudre surtension foudre type 1 type 2 varistance',
+    how: 'Des varistances deviennent conductrices au-delà d’un seuil et écoulent la surtension vers la terre, en la limitant au niveau Up. Un parafoudre autoprotégé intègre sa protection et n’a pas besoin de disjoncteur dédié.',
+    terms: [['L / N', 'raccordement au réseau, en tête du tableau'], ['PE', 'terre (liaison la plus courte possible)']],
+    draw: { body: 'mod', w: 2, top: [['N', 'B', 'neutre (tête du tableau)'], ['L', 'R', 'phase (tête du tableau)']], bot: [['PE', 'GY', 'barrette de terre, au plus court']] },
+    wiring: ['Au plus près de l’arrivée, en amont des protections du tableau (FAQ Legrand).', 'Conducteurs de raccordement (phase, neutre, terre) les plus courts possible : la notice du parafoudre donne la longueur à ne pas dépasser.', 'Voyant de fin de vie : cassette à remplacer quand il le signale.'],
+    norm: 'Obligatoire si le bâtiment a un paratonnerre (type 1 s’il est sur le bâtiment ou à moins de 50 m) ; en zone AQ2 avec une alimentation aérienne ; et quand une coupure toucherait la sécurité des personnes (matériel médical à domicile, alarmes intrusion, incendie ou technique) : obligatoire en AQ2, sinon selon une analyse de risques (guides Legrand et ABB). Édition 2024 : In ≥ 5 kA, raccordement en 6 mm² au moins pour un type 2, et parafoudre aussi sur la ligne de communication cuivre si l’installation en a un.',
+    src: ['https://www.legrand.fr/catalogue/contacteur-minuterie-parafoudre/parafoudre-modulaire-pour-logement-avec-protection-integree-2-modules', '@se/R9PLC/', 'https://www.capeb.fr/www/capeb/media//cotedor/document/DP_revision-de-la-norme-nf-c15-100_decembre-2024.pdf'] },
+  is: { cat: 'tab', name: 'Interrupteur-sectionneur', mods: '2 modules', alias: 'interrupteur sectionneur inter de tete coupure isw sbn',
+    how: 'Il coupe en charge et sectionne, sans aucune protection. Il sert d’interrupteur de tête de tableau ou de rangée.',
+    terms: [['N / L (haut)', 'arrivée'], ['N / L (bas)', 'départ']],
+    draw: { body: 'mod', w: 2, top: [['N', 'B', 'arrivée'], ['L', 'R', 'arrivée']], bot: [['N', 'B', 'départ'], ['L', 'R', 'départ']] },
+    wiring: ['Placé en amont des interrupteurs différentiels ; son calibre est coordonné avec la protection en amont.'],
+    src: ['@123/gamme-materiel-electrique/interrupteur-sectionneur.html', '@se/A9S65263/'] },
+  pmod: { cat: 'tab', name: 'Prise de courant modulaire', mods: '2,5 modules', alias: 'prise modulaire tableau rail din 2p+t ipc',
+    how: 'Prise 2P+T clipsée sur le rail du tableau, en aval d’un disjoncteur phase + neutre : pratique pour brancher un outil ou une box près du tableau.',
+    terms: [['L / N / ⏚', 'alimentation (Legrand 092782 : par le bas, compatible peigne)']],
+    draw: { body: 'mod', w: 2, bot: [['N', 'B', 'neutre'], ['L', 'R', 'phase'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Alimentée par un disjoncteur phase + neutre (peigne ou fils).'],
+    src: ['https://www.legrand.fr/catalogue/signalisation-et-prise/prise-de-courant-modulaire-avec-terre-10a-et-16a-25-modules', '@se/A9A15307/'] },
+  vy: { cat: 'tab', name: 'Voyant modulaire', mods: '1 module', alias: 'voyant lumineux signalisation led modulaire iil',
+    how: 'Voyant LED 230 V qui montre si un circuit, un appareil ou une phase est sous tension.',
+    terms: [['2 bornes', 'phase et neutre du circuit à surveiller']],
+    draw: { body: 'mod', top: [['L', 'R', 'phase surveillée'], ['N', 'B', 'neutre']] },
+    wiring: ['Branché entre la phase à surveiller et le neutre.'],
+    src: ['https://www.legrand.fr/catalogue/signalisation-et-prise/voyant-de-signalisation-led-vert-1-module', '@se/A9E18320/'] },
+  peigne: { cat: 'tab', name: 'Peignes et répartiteurs', mods: '', alias: 'peigne alimentation horizontal vertical repartiteur rangee hx3 vx3 r9pxh barre',
+    how: 'Un peigne vertical relie l’arrivée (disjoncteur de branchement ou interrupteur de tête) aux interrupteurs différentiels en tête de rangée. La sortie de chaque différentiel alimente un peigne horizontal phase + neutre qui dessert le haut de tous les disjoncteurs de la rangée.',
+    terms: [['phase / neutre', 'repérés par couleur : Legrand 092793 côté noir = phase, côté bleu = neutre ; chez Hager, barres de pontage à isolant marron (phase) ou bleu (neutre)']],
+    wiring: ['Coupe le peigne à la bonne longueur et mets les capots sur les dents libres.', 'Pas de câblage en repiquage entre disjoncteurs : le peigne s’en charge.'],
+    limits: 'Peignes Legrand et Schneider relevés : 63 A.',
+    src: ['https://www.legrand.fr/catalogue/peigne-et-accessoires-de-raccordement/peigne-dalimentation-horizontale-pour-uni-et-uni-neutre-13-modules', '@se/R9PXH213/', '@se/R9PXV/'] },
+  linky: { cat: 'tab', name: 'Compteur Linky : contact heures creuses', mods: '', alias: 'linky compteur c1 c2 contact sec tic i1 i2 enedis heures creuses relais',
+    how: 'Le compteur pilote un contact sec C1-C2 selon le contrat (heures creuses). Il commande la bobine du contacteur jour/nuit. La TIC (télé-information client) transmet les données du compteur à un gestionnaire d’énergie.',
+    terms: [['C1 / C2', 'contact sec heures creuses (sans tension : il faut y amener la phase de commande)'], ['I1 / I2', 'TIC (télé-information)'], ['A', 'alimentation de la TIC (avec I1)']],
+    draw: { body: 'dev', bot: [['C1', 'R', 'phase du disjoncteur 2 A'], ['C2', 'K', 'vers A1 du contacteur']] },
+    wiring: ['C1 et C2 se mettent en série dans le circuit de commande du contacteur jour/nuit (phase 2 A → C1 → C2 → A1).', 'Bornes TIC : conducteurs de 0,4 à 1,4 mm de diamètre (notice Enedis).'],
+    limits: 'Le courant admis par le contact C1-C2 n’est pas donné par la notice Enedis lue : ne commande qu’une bobine de contacteur, jamais l’appareil directement.',
+    add: { type: 'hc', params: { load: 'ce', cmd: 'edf' } }, src: ['https://www.enedis.fr/media/2035/download', 'https://fr.wikipedia.org/wiki/Linky'] },
+
+  /* ---------------------------------------------------------- appareillage mural */
+  vv: { cat: 'mur', name: 'Interrupteur va-et-vient', mods: '', alias: 'interrupteur va et vient vv simple allumage commande inverseur 10ax l 1 2',
+    how: 'Mécanisme à contact inverseur : la borne commune L est reliée à la borne 1 ou à la borne 2 selon la position. Seul (L + 1), il fait un simple allumage ; deux va-et-vient reliés par deux navettes commandent un éclairage depuis deux endroits.',
+    terms: [['L', 'commun : la phase (simple allumage, 1er va-et-vient) ou le retour lampe (2e va-et-vient)'], ['1', 'navette 1 ; retour lampe en simple allumage'], ['2', 'navette 2']],
+    termsNote: 'Repères Legrand (L, 1, 2). Odace 2025 : bouton de déverrouillage rouge pour la phase, gris pour les navettes.',
+    draw: { body: 'wall', bot: [['L', 'R', 'phase (ou retour, sur le 2e)'], ['1', 'K', 'navette 1 / retour'], ['2', 'K', 'navette 2']] },
+    wiring: ['Simple allumage : phase sur L, retour lampe sur 1.', 'Va-et-vient : phase sur L du 1er ; navettes 1↔1 et 2↔2 ; retour lampe sur L du 2e.', 'Le neutre et la terre vont directement au point lumineux (DCL), jamais sur l’interrupteur.', 'Bornes automatiques : 2 fils de 2,5 mm² au plus ; dénudage 12 mm (Odace, Céliane CM0001).'],
+    limits: '10 AX 250 V ; 100 W au plus en lampes à ballast intégré (S520204, CM0001).',
+    errors: ['Couper le neutre au lieu de la phase : la douille reste sous tension interrupteur ouvert.'],
+    add: { type: 'vv' }, src: ['@lg/questions-frequentes/comment-cabler-un-interrupteur-va-et-vient', '@123/legrand-celiane-interrupteur-va-et-vient-cm0001.html', '@123/media/wysiwyg/telechargement/document/Schneider%20Electric_Odace_S520204.pdf'] },
+  dvv: { cat: 'mur', name: 'Double va-et-vient (double allumage)', mods: '', alias: 'double va et vient double allumage deux touches double interrupteur',
+    how: 'Deux contacts inverseurs indépendants sous deux touches : il commande deux circuits d’éclairage depuis un même point. Chaque touche peut aussi travailler en va-et-vient.',
+    terms: [['L, 1, 2 (× 2)', 'un commun et deux bornes par touche (Odace S520214 : 6 bornes)']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase (touche 1)'], ['1', 'K', 'retour 1'], ['L', 'R', 'phase (touche 2, pont)'], ['1', 'M', 'retour 2']] },
+    wiring: ['Même phase pour les deux touches : un pont entre les deux communs.', 'Retour 1 sur la touche 1, retour 2 sur la touche 2.', 'En va-et-vient, chaque touche reçoit ses propres navettes.'],
+    limits: '10 AX par contact.',
+    add: { type: 'da' }, src: ['@123/media/wysiwyg/telechargement/document/Odace_S520214.pdf', '@dm/35460-double-va-et-vient-unica-2-modules-10ax-blanc-schneider-electric-nu321318f.html'] },
+  perm: { cat: 'mur', name: 'Permutateur', mods: '', alias: 'permutateur inverseur 3 points de commande navettes l1 l2 3 4 trois endroits',
+    how: 'Mécanisme à 4 bornes qui croise ou décroise deux paires de navettes à chaque manœuvre. Placé entre deux va-et-vient, il ajoute un 3e point de commande ; plusieurs permutateurs à la suite en ajoutent d’autres.',
+    terms: [['L1, L2', 'navettes qui viennent du 1er va-et-vient'], ['3, 4', 'navettes qui partent vers le 2e va-et-vient (ou le permutateur suivant)']],
+    termsNote: 'Repères Legrand (FAQ). Odace S520205 : 4 bornes sans vis. Vérifie le schéma au dos du mécanisme.',
+    draw: { body: 'wall', bot: [['L1', 'K', 'navette du 1er VV'], ['L2', 'K', 'navette du 1er VV'], ['3', 'G', 'navette vers le 2e VV'], ['4', 'G', 'navette vers le 2e VV']] },
+    wiring: ['1er va-et-vient : phase sur L ; ses bornes 1 et 2 → L1 et L2 du permutateur.', 'Bornes 3 et 4 du permutateur → bornes 1 et 2 du 2e va-et-vient.', 'Retour lampe sur la borne L du 2e va-et-vient.'],
+    limits: '10 AX. Legrand conseille un télérupteur et des boutons-poussoirs « pour 3 points de commande et plus ». Céliane CM0005 : bornes à vis, 2 × 2,5 mm², dénudage 9 mm ; Odace : 12 mm.',
+    errors: ['Mettre une navette du 1er va-et-vient sur 3 au lieu de L2 : un point de commande ne marche plus dans certaines positions.'],
+    add: { type: 'pm' }, src: ['@lg/questions-frequentes/comment-brancher-plusieurs-va-et-vient-dans-une-piece-avec-trois-points-de-commande', '@lgp/permutateur-dooxie-10ax-250v-finition-blanc', '@hg/wxf010-permutateur-gallery-2m'] },
+  bp: { cat: 'mur', name: 'Bouton-poussoir', mods: '', alias: 'bouton poussoir bp poussoir lumineux porte etiquette impulsion no nf',
+    how: 'Contact à fermeture qui n’est fermé que pendant l’appui : il envoie une impulsion à un télérupteur, une minuterie, un relais ou une sonnerie. Les versions inverseur (NO/NF) peuvent aussi ouvrir un circuit.',
+    terms: [['2 bornes', 'phase (ou commande) / départ vers la bobine ou l’entrée de commande']],
+    draw: { body: 'wall', bot: [['1', 'R', 'phase des BP'], ['2', 'O', 'retour BP']] },
+    wiring: ['Les boutons-poussoirs se câblent en parallèle.', 'Bornes automatiques 2 × 2,5 mm² ; dénudage 13 mm (poussoirs Mosaic), 12 mm (Odace).', 'Lumineux (repérage) : pas de neutre, un faible courant traverse l’appareil commandé. Témoin : neutre nécessaire.'],
+    limits: '6 A (Mosaic, Céliane), 10 A (Odace, Unica). Hager WXF060/061 : un poussoir lumineux demande un neutre séparé.',
+    add: { type: 'tl' }, src: ['https://assets.legrand.com/general/legrand-fr/np-ft-gt/f00421fr-02.pdf', 'https://batpro-madagascar.com/wp-content/uploads/2020/08/Odace_S520206.pdf'] },
+  voyant: { cat: 'mur', name: 'Interrupteur à voyant (lumineux ou témoin)', mods: '', alias: 'interrupteur voyant lumineux temoin localisation lampe cave exterieur',
+    how: 'Lumineux (repérage) : le voyant est en parallèle sur le contact et s’allume quand la lampe est éteinte, pour trouver l’interrupteur dans le noir. Témoin : le voyant est entre la sortie et le neutre, il s’allume quand la lampe est allumée (lampe qu’on ne voit pas : cave, extérieur).',
+    terms: [['L, 1', 'lumineux : câblé comme un simple allumage'], ['L, N, 2', 'témoin : phase sur L, neutre sur N, retour lampe sur 2 (Legrand)']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['2', 'K', 'retour lampe'], ['N', 'B', 'neutre (témoin)']] },
+    wiring: ['Lumineux : comme un interrupteur simple (2 fils).', 'Témoin : 3 fils, le neutre en plus.', 'Un voyant lumineux peut faire luire faiblement certaines lampes LED : à tester.'],
+    limits: 'Voyants Legrand 230 V à clipser : lumineux 067686L (0,041 W), témoin 067685L (0,39 W).',
+    add: { type: 'sa', params: { cde: 'voyt' } }, src: ['@lg/questions-frequentes/comment-faire-le-cablage-dun-interrupteur', '@lga/DOCUMENT/CB2022_2023FR_lr-p1101.pdf'] },
+  var: { cat: 'mur', name: 'Variateur', mods: '', alias: 'variateur gradateur rotatif touche led dimmable 2 fils 3 fils neutre',
+    how: 'Électronique qui règle la puissance envoyée aux lampes en découpant l’onde (début ou fin de phase selon la charge). En 2 fils, il remplace un interrupteur et s’alimente à travers la lampe ; en 3 fils, il a le neutre : charge minimale plus faible et plus de puissance.',
+    terms: [['phase', 'arrivée de la phase'], ['sortie', 'vers les lampes (retour)'], ['N', 'neutre (modèles 3 fils)'], ['poussoir', 'entrée pour des poussoirs déportés (selon modèle)']],
+    termsNote: 'Repères selon le modèle : suis le schéma de la notice.',
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['sortie', 'K', 'vers les lampes'], ['N', 'B', 'neutre (3 fils)']] },
+    wiring: ['Un seul variateur par éclairage ; les autres points de commande se font avec des poussoirs (pas de va-et-vient mécanique).', 'Mosaic 078407A : bornes à vis, dénudage 8 mm, boîte de 40 mm de profondeur au moins.', 'Poussoirs déportés : 40 m au plus (Hager), 50 m (Unica).'],
+    limits: 'Mosaic 078407A (2 fils) : 125 W LED ; Dooxie 600060A : LED 3–125 W, 10 lampes au plus ; Hager WXF060/061 : LED 3–70 W. Lampes « dimmables » uniquement.',
+    errors: ['Brancher des lampes non dimmables : clignotement ou pas de variation.', 'Variateur 2 fils sous la charge minimale : la lampe scintille (compensateur Legrand 040149).'],
+    add: { type: 'sa', params: { cde: 'var2' } }, src: ['@lgp/interrupteur-variateur-mosaic-universel-2-fils-sans-neutre-125w-led-2-modules-blanc', 'https://assets.hager.com/step-content/P%2FHA_22846631%2FDocument%2Fstd.lang.all%2FWXF060-WXF061__VARIATEURS-GALLERY__FR__2019-01__MANUAL.pdf'] },
+  det: { cat: 'mur', name: 'Détecteur / interrupteur automatique', mods: '', alias: 'detecteur mouvement presence interrupteur automatique infrarouge ir 2 fils 3 fils lux temporisation',
+    how: 'Capteur infrarouge passif : il allume quand il détecte un mouvement et que la lumière est sous le seuil réglé, puis éteint après la temporisation. Le 2 fils remplace un simple allumage (petit courant permanent à travers la lampe) ; le 3 fils prend le neutre et accepte toutes les charges.',
+    terms: [['phase', 'arrivée de la phase'], ['sortie', 'vers les lampes'], ['N', 'neutre (modèles 3 fils)']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['sortie', 'K', 'vers les lampes'], ['N', 'B', 'neutre (3 fils)']] },
+    wiring: ['À poser vers 1,10 à 1,40 m.', 'Bornes à vis, dénudage 8 mm (078458A, S520524).', '2 fils : 3 détecteurs au plus en parallèle (Odace). 3 fils : maître/esclave et poussoirs possibles.'],
+    settings: 'Temporisation et seuil de luminosité : Legrand 5 s–30 min, 5–1 275 lux ; Odace 5 s–20 min, 5–1 000 lux.',
+    limits: '2 fils : charge minimale (Legrand 2 W). Odace S520524 : 40–350 W halogène, pas compatible LED d’origine. Dooxie 3 fils 600061A : 500 W LED.',
+    add: { type: 'sa', params: { cde: 'det2' } }, src: ['@lgp/detecteur-mural-universel-mosaic-2-fils-sans-neutre-a-detection-infrarouge-100w-led-2-modules-blanc', 'https://www.se.com/fr/fr/faqs/FA360867', '@hg/wxf052-interrupteur-automatique-gallery-2-fils'] },
+  vrs: { cat: 'mur', name: 'Interrupteur de volet roulant', mods: '', alias: 'interrupteur volet roulant inverseur montee descente fleches store',
+    how: 'Double inverseur verrouillé : il envoie la phase soit sur le fil de montée, soit sur le fil de descente du moteur, jamais les deux. Les fins de course du moteur coupent en butée.',
+    terms: [['L', 'phase'], ['↑ / ↓', 'montée et descente du moteur (repères selon la marque)']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['↑', 'K', 'montée (moteur)'], ['↓', 'M', 'descente (moteur)']] },
+    wiring: ['Un inverseur par moteur : jamais deux moteurs sur un inverseur, ni deux inverseurs sur un moteur (notice Somfy).', 'Neutre et terre du moteur en direct.', 'Pour commander plusieurs volets ensemble : relais ou commande centralisée.'],
+    limits: 'Dooxie 600021 : 6 AX ; Odace S940208 : 6 AX, verrouillage mécanique et électrique ; Unica NU320818 : 6 A.',
+    add: { type: 'vr' }, src: ['@123/legrand-dooxie-interrupteur-volets-roulants-blanc-600021.html', 'https://docs.rs-online.com/6d64/A700000014580222.pdf', 'https://service.somfy.com/downloads/fr_v5/lt50-60.pdf'] },
+  pc: { cat: 'mur', name: 'Prise de courant 2P+T 16 A', mods: '', alias: 'prise courant pc 2p+t 16a socle surface puits eclips obturateurs repiquage',
+    how: 'Socle qui fournit la phase, le neutre et la terre (broche) à un appareil mobile. Les obturateurs (éclips) protègent les enfants.',
+    terms: [['L', 'phase'], ['N', 'neutre'], ['⏚', 'terre']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['N', 'B', 'neutre'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Repiquage de prise en prise : bornes automatiques doubles (une arrivée + un départ, 2 × 2,5 mm²).', 'Fixation par vis dans une boîte d’encastrement : les griffes sont interdites (NF C 15-100).'],
+    norm: 'Circuit 1,5 mm² / 16 A : 8 prises au plus ; 2,5 mm² / 20 A : 12 prises au plus ; circuit cuisine : 6. Chaque socle compte, même dans un boîtier double. Axe à 5 cm au moins du sol (12 cm pour une prise 32 A) ; la prise placée près de l’interrupteur d’entrée de la pièce : entre 0,90 et 1,30 m. Séjour : 1 prise par tranche de 4 m², au moins 5 ; au-delà de 28 m², au moins 7 (le nombre se décide avec le client) ; + 2 prises multimédia. Chambre : 3. Cuisine de plus de 4 m² : 6 dont 4 au-dessus du plan de travail (3 si 4 m² ou moins). Autres pièces de plus de 4 m² (sauf WC) : 1.',
+    add: { type: 'pc' }, src: ['@123/legrand-mosaic-prise-de-courant-2p-t-surface-blanc-077111l.html', '@123/schneider-odace-prise-de-courant-2p-t-affleurante-blanc-craie-s920052.html', 'https://assets.legrand.com/editorial/legrandfr/outils/documentations-et-guides/legrand-guide-norme-nf-c-15-100.pdf'] },
+  pcmd: { cat: 'mur', name: 'Prise commandée', mods: '', alias: 'prise commandee interrupteur lampe a poser retour',
+    how: 'Prise 2P+T qui reçoit le retour d’un interrupteur au lieu d’une phase permanente : on allume une lampe à poser depuis l’entrée de la pièce.',
+    terms: [['L', 'retour de l’interrupteur'], ['N', 'neutre'], ['⏚', 'terre']],
+    draw: { body: 'wall', bot: [['L', 'K', 'retour de l’interrupteur'], ['N', 'B', 'neutre'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Comme une prise, mais sa borne L reçoit le retour de l’interrupteur.'],
+    norm: 'Elle compte comme un point d’éclairage (8 au plus par circuit). Au plus 2 prises commandées par interrupteur, dans la même pièce. « Les prises de courant commandées sont interdites dans les toilettes et les salles de bain » (guide ABB).',
+    add: { type: 'sa', params: { pcmd: 1 } }, src: ['https://assets.legrand.com/editorial/legrandfr/outils/documentations-et-guides/legrand-guide-norme-nf-c-15-100.pdf', 'https://media.adeo.com/media/4846409/media.pdf'] },
+  usb: { cat: 'mur', name: 'Prise USB et prise 2P+T avec USB', mods: '', alias: 'prise usb chargeur usb-c usb a prise avec usb',
+    how: 'Chargeur USB intégré à l’appareillage. Il a besoin de la phase et du neutre.',
+    terms: [['L / N', 'alimentation'], ['⏚', 'terre (prise 2P+T avec USB)']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['N', 'B', 'neutre'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Comme une prise : phase et neutre obligatoires.'],
+    norm: 'Guide Legrand 2024 : une prise USB seule ne compte pas dans le nombre de prises ; une prise 2P+T avec USB compte comme une prise.',
+    src: ['@123/legrand-dooxie-prise-de-courant-2p-t-surface-avec-prise-usb-type-c-blanc-600341.html', 'https://assets.legrand.com/editorial/legrandfr/outils/documentations-et-guides/legrand-guide-norme-nf-c-15-100.pdf'] },
+  sdc: { cat: 'mur', name: 'Sortie de câble', mods: '', alias: 'sortie de cable boite radiateur chauffe eau convecteur seche serviettes fil pilote serre cable',
+    how: 'Point de raccordement fixe pour un appareil sans prise (radiateur, chauffe-eau, volet, four encastré) : le câble arrive sur un bornier et il est tenu par un serre-câble. Pour un radiateur, elle reçoit aussi le fil pilote.',
+    terms: [['L, N, ⏚', 'alimentation'], ['FP', 'fil pilote (modèles prévus pour)']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['N', 'B', 'neutre'], ['FP', 'K', 'fil pilote'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Dooxie 600325 : bornes à vis, 3 × 2,5 mm² au plus, câble de 12 mm de diamètre au plus, dénudage 12 mm.', 'Le calibre de la sortie doit être au moins celui de la protection du circuit.'],
+    limits: 'Odace S920662 : 16 A ; Mosaic 077551 : 10 A.',
+    add: { type: 'ch' }, src: ['@123/legrand-dooxie-sortie-de-cable-blanc-600325.html', '@123/schneider-odace-sortie-de-cable-avec-serre-cables-blanc-craie-s920662.html', '@lg/mon-projet/tutoriels/comment-installer-une-sortie-de-cable'] },
+  thm: { cat: 'mur', name: 'Thermostat et programmateur mural', mods: '', alias: 'thermostat programmateur mural fil pilote chauffage ambiance',
+    how: 'Il envoie aux radiateurs les ordres du fil pilote (confort, éco, hors-gel…) selon l’heure ou la température, ou commande directement un contact.',
+    terms: [['L / N', 'alimentation'], ['FP ou contact', 'sortie des ordres, ou contact inverseur selon le modèle']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['N', 'B', 'neutre'], ['FP', 'K', 'fil pilote des radiateurs']] },
+    wiring: ['Le fil pilote est un conducteur en plus (ni bleu, ni vert/jaune), de la même section que le circuit, raccordé sur la borne fil pilote de chaque radiateur.'],
+    src: ['@lga/DOCUMENT/cm222600_0658.pdf', '@hgd/WXF315'] },
+  bps: { cat: 'mur', name: 'Bouton de sonnette', mods: '', alias: 'bouton sonnette poussoir carillon porte',
+    how: 'Bouton-poussoir à fermeture : il ferme le circuit de la sonnerie tant qu’on appuie. Plusieurs boutons se mettent en parallèle.',
+    terms: [['2 bornes', 'arrivée (12 V du transformateur) / départ vers la sonnerie']],
+    draw: { body: 'wall', bot: [['1', 'O', '12 V (transformateur)'], ['2', 'V', 'vers la sonnerie']] },
+    wiring: ['En série avec la sonnerie ; plusieurs boutons en parallèle.', 'En très basse tension : gaine à part, jamais avec des fils en 230 V.'],
+    limits: 'Odace S520246 : 10 A 250 V.',
+    add: { type: 'so' }, src: ['@123/schneider-odace-bouton-poussoir-carillon-blanc-s520246.html'] },
+  rj: { cat: 'mur', name: 'Prise RJ45 et prise TV', mods: '', alias: 'prise rj45 reseau ethernet grade 2tv 3tv cat6 stp prise tv coaxiale communication',
+    how: 'La RJ45 raccorde un câble à 4 paires (8 contacts) qui vient du tableau de communication ; son grade (2TV, 3TV) dit ce qu’elle peut transporter (téléphone, Ethernet, télévision). La prise TV coaxiale relie l’antenne ou le répartiteur.',
+    terms: [['8 contacts', 'code T568A ou T568B, le même aux deux bouts'], ['âme + tresse', 'prise TV coaxiale']],
+    wiring: ['Câblage en étoile depuis le tableau de communication ; détorsader le moins possible ; reprendre le blindage.'],
+    norm: 'Nombre de RJ45 : T1 : 2 ; T2 : 2 au séjour + 1 dans la chambre ; T3 et plus : 2 au séjour + 1 dans au moins 2 autres pièces. Grade 2TV au minimum, câble cat. 6 STP, à 1,30 m au plus du sol et près d’une prise de courant.',
+    src: ['@dm/3184-mecanisme-hager-gallery', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-mosaic/mecanismes-legrand-mosaic.html'] },
+  bip: { cat: 'mur', name: 'Interrupteur bipolaire', mods: '', alias: 'interrupteur bipolaire 2 poles coupure phase neutre',
+    how: 'Deux contacts manœuvrés ensemble, qui coupent en même temps la phase et le neutre : pour isoler un appareil ou un circuit sur place.',
+    terms: [['2 entrées / 2 sorties', 'phase et neutre']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase (arrivée)'], ['N', 'B', 'neutre (arrivée)'], ['L′', 'R', 'phase (départ)'], ['N′', 'B', 'neutre (départ)']] },
+    wiring: ['La phase et le neutre passent par l’appareil ; la terre va en direct.', 'Céliane CM0020 : bornes à vis 2 × 2,5 mm², dénudage 9 mm.'],
+    limits: 'Céliane CM0020 : 16 AX ; Hager WXF008 : 10 A.',
+    src: ['@lga/NP-FT-GT/F04019FR-01.pdf', 'https://assets.hager.com/step-content/P/PDS_155948090044FR/Document/std.lang.all/WXF008_0044_fr-FR.pdf'] },
+  vmcc: { cat: 'mur', name: 'Commande de VMC 2 vitesses', mods: '', alias: 'commande vmc 2 vitesses commutateur cuisine grande vitesse petite vitesse',
+    how: 'Commutateur 2 positions, sans position arrêt : petite vitesse en marche normale, grande vitesse à la demande (en cuisine). L’arrêt se fait seulement au tableau : la ventilation doit rester permanente.',
+    terms: [['L', 'phase (commun)'], ['PV', 'sortie petite vitesse'], ['GV', 'sortie grande vitesse']],
+    draw: { body: 'wall', bot: [['L', 'R', 'phase'], ['PV', 'K', 'petite vitesse (caisson)'], ['GV', 'M', 'grande vitesse (caisson)']] },
+    wiring: ['Phase sur le commun ; les deux sorties vont aux bornes petite et grande vitesse du caisson.', 'Pas d’interrupteur ordinaire qui arrêterait la VMC (Atlantic : arrêt « fortement déconseillé »).'],
+    add: { type: 'vmc', params: { vit: '2' } }, src: ['https://www.atlantic.fr/aide/ventilation/vmc-simple-flux/ma-vmc-simple-flux-ne-fonctionne-qu-en-petite-vitesse-ou-qu-en-grande-vitesse-que-faire', 'https://www.atlantic.fr/aide/ventilation/fonctionnement-utilisation/puis-je-arreter-ma-vmc-lorsque-je-m-absente'] },
+
+  /* ---------------------------------------------------------- raccordement */
+  w221: { cat: 'cnx', name: 'Bornes Wago 221 (à levier)', mods: '', alias: 'wago 221 borne levier connecteur 221-412 221-413 221-415 221-612 221-613 221-615 221-2411',
+    how: 'Bornes à leviers : on lève le levier, on glisse le fil dénudé, on rabat. Elles acceptent le fil rigide, semi-rigide et souple, et se rouvrent sans outil.',
+    terms: [['221-412 / 413 / 415', '2, 3 ou 5 fils de 0,2 à 4 mm² (souple dès 0,14 mm²), 32 A 450 V'], ['221-612 / 613 / 615', '2, 3 ou 5 fils de 0,5 à 6 mm², 41 A 450 V']],
+    draw: { body: 'wago' },
+    wiring: ['Dénude 11 mm (221 en 4 mm²) ou 12 à 14 mm (221 en 6 mm²).', 'Un fil par point de serrage, poussé jusqu’au fond, levier rabattu.', 'Range les bornes dans une boîte (de dérivation ou d’encastrement) qui reste accessible : jamais de connexion dans une gaine ni noyée dans le mur.'],
+    limits: 'Température ambiante 85 °C au plus (T85).',
+    src: ['https://www.wago.com/fr/produits/technique-de-raccordement/bornes-de-raccordement-221', '@of/539e8250-fefb-497a-9ca0-5df94ea29853/WAGO_221-412fr.pdf', '@of/78f3fe82-bf50-4634-8a22-fb825a00ee9c/WAGO_221-612fr.pdf'] },
+  w2273: { cat: 'cnx', name: 'Bornes Wago 2273 (fil rigide)', mods: '', alias: 'wago 2273 push wire borne boite derivation 2273-202 2273-203 2273-204 2273-205 2273-208',
+    how: 'Bornes à pousser (PUSH WIRE) pour boîtes de dérivation : on enfonce le fil rigide dénudé jusqu’au fond. Seulement pour le fil rigide.',
+    terms: [['2273-202 … 208', '2, 3, 4, 5 ou 8 fils rigides de 0,5 à 2,5 mm², 24 A 450 V']],
+    draw: { body: 'wago' },
+    wiring: ['Dénude 11 mm et pousse le fil jusqu’au fond.', 'Couleur du couvercle : 202 blanc, 203 orange, 204 rouge, 205 jaune, 208 gris clair.'],
+    limits: 'Fil rigide uniquement ; température ambiante 60 °C au plus (T60).',
+    src: ['https://www.wago.com/fr/bornes-d-installation/bornes-pour-bo%C3%AEtes-de-d%C3%A9rivation/p/2273-202', 'https://cdn.chausson.fr/catalog-document/2ce7956b-aaa4-4498-b5a5-0b45d3ae8a63/wago-2273-208fr.pdf'] },
+  w2773: { cat: 'cnx', name: 'Bornes Wago 2773 (4 mm²)', mods: '', alias: 'wago 2773 push wire 4 mm2 2773-402 2773-404 2773-408 2773-2401 inline',
+    how: 'Bornes à pousser pour fils jusqu’à 4 mm², et version « inline » (une entrée, une sortie) pour prolonger un fil.',
+    terms: [['2773-2401', 'inline : rigide 0,75–4 mm², souple avec embout 0,75–1,5 mm², 32 A'], ['2773-402 / 404 / 408', '2, 4 ou 8 fils de 0,75 à 4 mm², 32 A, dénudage 13 mm']],
+    draw: { body: 'wago' },
+    wiring: ['Dénude 10 à 11 mm (2773-2401) ou 13 mm (2773-40x) et pousse jusqu’au fond.'],
+    src: ['@of/d9a5c459-b73a-436b-ab74-36592eb1f8b8/WAGO_2773-2401fr.pdf', 'https://rapidonline.com/wago-2773-404-wago-4mm-32a-4-conductor-pushwire-connector-21-5334'] },
+  bdd: { cat: 'cnx', name: 'Boîte de dérivation étanche', mods: '', alias: 'boite de derivation plexo mureva etanche ip55 apparente embouts couvercle',
+    how: 'Boîte apparente qui protège les connexions (bornes Wago) d’un ou plusieurs circuits. Les embouts défonçables laissent entrer les gaines et les câbles de tous les côtés.',
+    terms: [['embouts', 'entrées des gaines et des câbles'], ['couvercle', 'doit rester accessible']],
+    wiring: ['Choisis une taille qui laisse de la place aux bornes et aux boucles de fils.', 'Entrées sur les côtés qui font face aux appareils, pour des fils courts et sans croisement.'],
+    limits: 'Plexo 092012 : IP55, IK07, fil incandescent 650 °C. Mureva Box ENN05004 : 80 × 80 × 45, 7 entrées.',
+    add: null, src: ['@lga/DOCUMENT/CB2022_2023FR_lr-p774.pdf', '@se/ENN05004/'] },
+  bat: { cat: 'cnx', name: 'Boîtes d’encastrement Batibox', mods: '', alias: 'batibox boite encastrement maconnerie cloison seche derivation dcl point de centre',
+    how: 'Boîtes à encastrer en maçonnerie ou en cloison sèche, pour l’appareillage, les dérivations encastrées et les points lumineux (boîtes DCL).',
+    terms: [['DCL', 'boîte de point de centre avec couvercle DCL']],
+    wiring: ['Boîtes d’encastrement obligatoires en vide de construction (Legrand, révision 2024).'],
+    limits: 'Batibox 089237 (DCL maçonnerie) : suspension jusqu’à 25 kg, 250 V~ 6 A, bornes automatiques avec dénudage de 9 mm.',
+    src: ['@lgp/boite-complete-batibox-maconnerie-pour-derivation-rectangulaire-120x120x40mm', '@lga/NP-FT-GT/F02092FR-00.pdf'] },
+  dcl: { cat: 'cnx', name: 'DCL (dispositif de connexion pour luminaire)', mods: '', alias: 'dcl douille fiche luminaire point de centre applique boite dcl',
+    how: 'Boîte encastrée au plafond ou au mur, avec un socle normalisé sur lequel s’enfiche la fiche du luminaire : on branche ou on change le luminaire sans toucher aux fils. La douille DCL (douille avec fiche) sert d’éclairage provisoire.',
+    terms: [['L', 'retour lampe'], ['N', 'neutre'], ['⏚', 'terre']],
+    draw: { body: 'dev', bot: [['L', 'K', 'retour de l’interrupteur'], ['N', 'B', 'neutre'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Le circuit arrive sur le socle de la boîte ; le luminaire se raccorde sur la fiche.'],
+    norm: 'DCL obligatoire sur les points de centre et les appliques. Séjour, chambre et cuisine : un point de centre DCL. Salle de bains, volume 2 : DCL avec obturateur IPX4, ou luminaire IPX4.',
+    add: { type: 'sa' }, src: ['https://assets.legrand.com/editorial/legrandfr/outils/documentations-et-guides/legrand-guide-norme-nf-c-15-100.pdf', 'https://www.legrand.fr/sites/default/files/pdf/13/87/d7/3245060893347.lite.pdf'] },
+  icta: { cat: 'cnx', name: 'Gaines ICTA et câbles', mods: '', alias: 'gaine icta conduit diametre 16 20 25 32 cable h07v-u h07v-r h07v-k r2v h07rn-f regle du tiers',
+    how: 'Le conduit ICTA protège les fils encastrés. On n’en remplit qu’un tiers de la section, pour pouvoir tirer et retirer les fils.',
+    terms: [['Ø16', '3 fils 1,5 mm², 2 en 2,5 mm², 1 en 6 mm²'], ['Ø20', '6 en 1,5 ; 4 en 2,5 ; 2 en 6'], ['Ø25', '10 en 1,5 ; 7 en 2,5 ; 3 en 6'], ['Ø32', '18 en 1,5 ; 13 en 2,5 ; 6 en 6']],
+    termsNote: 'Nombre de fils calculé d’après les sections de Nexans (H07V-U 1,5 = 8,55 mm², 2,5 = 11,9 mm², H07V-R 6 = 22,9 mm²).',
+    wiring: ['H07V-U : fil rigide pour les installations fixes sous conduit.', 'H07V-R : multibrins (6, 10, 16 mm²), pour la plaque de cuisson ou la terre.', 'H07V-K : souple, pour le câblage des tableaux.', 'R2V (U-1000 R2V) : câble rigide intérieur ou extérieur, enterrable avec une protection en plus.', 'H07RN-F : souple caoutchouc pour rallonges et chantiers.', 'Courant fort et communication dans des conduits séparés ; communication en Ø25 au moins.'],
+    src: ['https://home.nexans.fr/app/uploads/2023/04/Diametre-des-gaines.pdf', 'https://home.nexans.fr/les-gaines-electriques'] },
+
+  /* ---------------------------------------------------------- appareils reliés */
+  vmc: { cat: 'eqp', name: 'VMC simple flux', mods: '', alias: 'vmc ventilation simple flux hygroreglable autoreglable caisson petite vitesse grande vitesse',
+    how: 'Le caisson extrait l’air des pièces humides (cuisine, salle d’eau, WC) en continu. Hygroréglable : le débit suit l’humidité. En 2 vitesses, la grande vitesse se commande en cuisine (commutateur, poussoir temporisé ou cordelette selon le modèle).',
+    terms: [['L, N, ⏚', 'alimentation (1 vitesse)'], ['PV, GV', 'petite et grande vitesse (modèles 2 vitesses)']],
+    draw: { body: 'dev', bot: [['PV', 'K', 'petite vitesse'], ['GV', 'M', 'grande vitesse'], ['N', 'B', 'neutre'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Circuit spécialisé : 1,5 mm² protégé par un disjoncteur 2 A, sous un différentiel 30 mA.', 'Le fil de terre un peu plus long que les autres (notice Atlantic Hygrocosy).', 'Pas d’arrêt par un interrupteur ordinaire : la VMC fonctionne en permanence.'],
+    norm: 'VMC : 1,5 mm², 2 A (jusqu’à 16 A dans des cas particuliers, guide Hager). Détecteur d’arc (AFDD) conseillé sur ce circuit alimenté en permanence.',
+    add: { type: 'vmc' }, src: ['@lg/questions-frequentes/quel-disjoncteur-pour-une-vmc', 'https://www.atlantic.fr/aide/ventilation/vmc-simple-flux/mon-installation-vmc-hygroreglable-d-atlantic-quelle-protection-electrique'] },
+  mvr: { cat: 'eqp', name: 'Moteur de volet roulant', mods: '', alias: 'moteur volet roulant somfy oximo ilmo simu bubendorff marron noir bleu fin de course',
+    how: 'Moteur tubulaire à deux sens de marche : la phase sur un fil le fait monter, sur l’autre le fait descendre. Les fins de course l’arrêtent en butée.',
+    terms: [['marron', 'phase sens 1 (Somfy)'], ['noir', 'phase sens 2 (Somfy)'], ['bleu', 'neutre'], ['vert/jaune', 'terre']],
+    draw: { body: 'dev', bot: [['marron', 'M', 'sens 1'], ['noir', 'K', 'sens 2'], ['bleu', 'B', 'neutre'], ['V/J', 'GY', 'terre']] },
+    wiring: ['Si le volet descend quand on appuie sur « montée », inverse le marron et le noir au point de commande (notice Somfy Ilmo).', 'Un seul moteur par inverseur ; jamais deux inverseurs sur un moteur ; pas de double poussoir (notice Somfy).'],
+    norm: 'Volets roulants : au moins un circuit dédié en 1,5 mm² protégé par 16 A (2 circuits conseillés).',
+    add: { type: 'vr' }, src: ['https://service.somfy.com/downloads/fr_v5/ilmowt.pdf', 'https://service.somfy.com/downloads/fr_v5/lt50-60.pdf'] },
+  rad: { cat: 'eqp', name: 'Radiateur électrique à fil pilote', mods: '', alias: 'radiateur convecteur panneau rayonnant chaleur douce fil pilote noir marron gris seche serviettes',
+    how: 'Le radiateur chauffe selon son thermostat ; le fil pilote lui donne seulement le mode (confort, éco, hors-gel, arrêt…).',
+    terms: [['marron', 'phase'], ['bleu (ou gris)', 'neutre — gris = neutre chez Acova'], ['noir', 'fil pilote'], ['vert/jaune', 'terre, s’il y en a une']],
+    termsNote: 'Legrand indique que le fil pilote est « généralement noir ou gris » : vérifie toujours la notice du radiateur.',
+    draw: { body: 'dev', bot: [['marron', 'R', 'phase'], ['bleu', 'B', 'neutre'], ['noir', 'K', 'fil pilote']] },
+    wiring: ['Raccordement par une sortie de câble (ou un boîtier de connexion) : jamais de prise de courant.', 'Fil pilote : ne jamais le relier à la terre ; s’il ne sert pas, l’isoler.', 'Ordres (tension entre fil pilote et neutre) : 0 V = Confort ; 230 V = Éco (confort −3,5 °C) ; demi-alternance négative = Hors-gel (environ 7 °C) ; demi-alternance positive = Arrêt ; 230 V pendant 3 s ou 7 s toutes les 5 min = Confort −1 ou −2.'],
+    norm: 'Puissance du circuit → protection et section : 3 500 W → 16 A, 1,5 mm² ; 4 500 W → 20 A, 2,5 mm² ; 5 750 W → 25 A, 4 mm² ; 7 250 W → 32 A, 6 mm².',
+    add: { type: 'ch' }, src: ['https://www.thermor.fr/faq/radiateur/utiliser/comment-brancher-un-radiateur-electrique', 'https://www.acova.fr/sites/default/files/pim/document/notice-utilisation/acova-taffetas-el-5011-40016520-notice-utilisation_3.pdf', '@lg/questions-frequentes/comment-savoir-si-mon-radiateur-electrique-possede-la-fonction-fil-pilote'] },
+  ce: { cat: 'eqp', name: 'Chauffe-eau électrique', mods: '', alias: 'chauffe eau ballon cumulus thermostat resistance heures creuses',
+    how: 'Une résistance chauffe l’eau ; le thermostat la coupe à la température réglée. En général, il chauffe en heures creuses grâce au contacteur jour/nuit.',
+    terms: [['L, N', 'sur la platine du thermostat (jamais directement sur la résistance)'], ['⏚', 'terre obligatoire']],
+    draw: { body: 'dev', bot: [['L', 'R', 'phase (contacteur 2)'], ['N', 'B', 'neutre (contacteur 4)'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Raccordement sur la platine de puissance du thermostat : « tout branchement sur la résistance en direct est interdit » (Thermor).', 'Câble rigide 3 × 2,5 mm² au moins en monophasé ; pas de prise de courant ; sortie de câble pour un modèle précâblé.', 'Sécurité thermique à réarmement manuel (bouton rouge).'],
+    norm: 'Circuit spécialisé en 2,5 mm² protégé par 20 A. Le contacteur jour/nuit (asservissement tarifaire) le fait chauffer en heures creuses quand le contrat en a.',
+    add: { type: 'hc', params: { load: 'ce', cmd: 'edf' } }, src: ['https://www.thermor.fr/faq/chauffe-eau/utiliser/comment-realiser-le-branchement-electrique-d-un-chauffe-eau', 'https://www.atlantic.fr/aide/chauffe-eau-electrique/fonctionnement-utilisation/comment-faire-fonctionner-un-chauffe-eau-pendant-les-heures-creuses'] },
+  plq: { cat: 'eqp', name: 'Plaque de cuisson', mods: '', alias: 'plaque de cuisson induction vitroceramique cuisiniere 32 a 6 mm2 monophase triphase',
+    how: 'Gros récepteur de cuisine raccordé sur une boîte de connexion (ou une prise 32 A), sur son propre circuit.',
+    terms: [['L, N, ⏚', 'monophasé'], ['L1, L2, L3, N, ⏚', 'triphasé']],
+    termsNote: 'Le bornier de la plaque (barrettes de pontage mono/tri) change d’un modèle à l’autre : suis l’étiquette de l’appareil.',
+    draw: { body: 'dev', bot: [['L', 'R', 'phase'], ['N', 'B', 'neutre'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Monophasé : câble 3G6 (ou H07V-R 6), disjoncteur 32 A.', 'Triphasé : 5G2,5, disjoncteur 20 A.'],
+    norm: 'Différentiel de type A (ou F) obligatoire.',
+    add: { type: 'pl' }, src: ['https://home.nexans.fr/cuisine-circuits-specialises', 'https://hager.com/fr/normes/nfc-15-100'] },
+  irve: { cat: 'eqp', name: 'Recharge de voiture électrique', mods: '', alias: 'irve borne recharge prise renforcee green up wallbox voiture electrique',
+    how: 'Prise renforcée (environ 3,7 kW) ou borne murale (wallbox, 7,4 kW en monophasé) sur un circuit dédié, avec son propre différentiel.',
+    terms: [['L, N, ⏚', 'alimentation du point de recharge']],
+    wiring: ['Un circuit par point de recharge.', 'Prise renforcée : 2,5 mm², disjoncteur 20 A. Borne 32 A : 10 mm², disjoncteur 40 A.', 'Au-delà de 3,7 kW, l’installation est faite par un électricien qualifié IRVE.'],
+    norm: 'Un différentiel 30 mA propre à chaque point de recharge, au minimum de type A avec coupure si le défaut continu dépasse 6 mA, sinon type B ; le type AC n’est pas admis.',
+    src: ['https://media.adeo.com/media/4846409/media.pdf', 'https://hager.com/fr/normes/nfc-15-100'] },
+  daaf: { cat: 'eqp', name: 'Détecteur de fumée (DAAF)', mods: '', alias: 'detecteur avertisseur autonome de fumee daaf incendie',
+    how: 'Détecteur avertisseur autonome de fumée : il sonne fort dès qu’il détecte de la fumée.',
+    wiring: ['Au moins un par logement, au plafond, de préférence dans le dégagement qui dessert les chambres ; un par étage recommandé.', 'À pile, ou sur secteur avec une alimentation de secours. Marquage CE selon NF EN 14604.'],
+    norm: 'Obligatoire dans tout logement (Code de la construction et de l’habitation). Le propriétaire l’installe, l’occupant l’entretient.',
+    src: ['https://www.service-public.gouv.fr/particuliers/vosdroits/F19950'] },
+  lum: { cat: 'eqp', name: 'Point lumineux et luminaire', mods: '', alias: 'point lumineux luminaire lampe plafonnier applique spot led ruban',
+    how: 'Chaque point lumineux reçoit le retour de sa commande, le neutre et la terre, sur un DCL.',
+    terms: [['L', 'retour de la commande'], ['N', 'neutre'], ['⏚', 'terre']],
+    draw: { body: 'dev', bot: [['L', 'K', 'retour'], ['N', 'B', 'neutre'], ['⏚', 'GY', 'terre']] },
+    wiring: ['Le neutre ne passe jamais par l’interrupteur.'],
+    norm: '8 points d’éclairage au plus par circuit (prises commandées comprises) ; spots et bandeaux : 1 point par tranche de 300 VA. Au moins 2 circuits d’éclairage par logement (1 seul admis en T1). Volume 2 de la salle de bains : IPX4.',
+    add: { type: 'sa' }, src: ['https://assets.legrand.com/editorial/legrandfr/outils/documentations-et-guides/legrand-guide-norme-nf-c-15-100.pdf', 'https://hager.com/fr/normes/nfc-15-100/disjoncteur'] },
+};
+</script>
+<script>
+/* ------------------------------------------------------------ références vérifiées
+   [marque, gamme, référence, désignation, type, précisions, page où elle a été vue] */
+var APP_REFS = [
+  // télérupteurs
+  ['Legrand', 'CX³', '412408', 'Télérupteur 16 A 1F (1 contact), bobine 230 V', 'tl', '1 module, bornes à vis', '@123/legrand-cx3-telerupteur-16a.html'],
+  ['Legrand', 'CX³', '412400', 'Télérupteur silencieux 16 A 1F', 'tl', 'pas de neutre aux boutons-poussoirs', '@123/legrand-cx3-telerupteur-16a-1no-monophase-silencieux-412400.html'],
+  ['Legrand', 'CX³', '412401', 'Télérupteur silencieux temporisé 16 A 1F', 'tl', '5 à 60 min, préavis d’extinction, 1 module', '@lgp/telerupteur-cx3-silencieux-temporise-avec-bornes-a-vis-1p-16a-250v-contact-1f-tension-commande-230v-1-module'],
+  ['Legrand', 'CX³', '412412', 'Télérupteur standard 2 pôles (2F) 16 A', 'tl', '1 module, bornes à vis', '@dm/1320-telerupteur-standard-cx-230v-bornes-a-vis-2-poles-legrand-412412.html'],
+  ['Hager', '', 'EPN510', 'Télérupteur 1F 230 V 16 A', 'tl', '1 module, bobine 230 V CA / 110 V CC', '@hg/epn510-telerupteur-1f-230v'],
+  ['Hager', '', 'EPS410B', 'Télérupteur électronique silencieux 1F 230 V sans vis 16 A', 'tl', 'raccordement QuickConnect 1,5–2,5 mm²', '@hg/eps410b-telerupteur-silencieux-1f-230v-sanvis'],
+  ['Hager', '', 'EPN520', 'Télérupteur 2F 230 V 16 A', 'tl', '2 contacts, 1 module', '@hg/epn520-telerupteur-2f-230v'],
+  ['Schneider Electric', 'Acti9 iTL', 'A9C30811', 'Télérupteur iTL 16 A 1 NO 230-240 V CA', 'tl', '18 mm ; boutons lumineux 3 mA au total', '@dm/7989-telerupteur-auxiliaire-itl-acti9-schneider-electric-a9c30811.html'],
+  ['Schneider Electric', 'Acti9 iTL', 'A9C30812', 'Télérupteur iTL 16 A 2 NO 230-240 V CA', 'tl', 'manette O-I prioritaire', '@se/A9C30812/acti9-itl-t%C3%A9l%C3%A9rupteur-16a-2no-230-240vca-110vcc-5060hz'],
+  ['Schneider Electric', 'Acti9 iTL+', 'A9C15032', 'Télérupteur silencieux 1P 16 A 230 V CA', 'tl', 'compatible LED', '@se/A9C15032/'],
+  ['Schneider Electric', 'Resi9', 'R9PCL2S', 'Télérupteur silencieux 16 A 1 NO', 'tl', '1 module, neutre obligatoire', '@123/schneider-resi9-telerupteur-silencieux-16a-1no-monophase-r9pcl2s.html'],
+  // minuteries
+  ['Legrand', '', '412602', 'Minuterie modulaire 230 V, sortie 16 A', 'mn', '0,5 à 10 min, 3 ou 4 fils, 1 module', '@lgp/minuterie-modulaire-230v-50hz-et-60hz-sortie-16a-250v-1-module'],
+  ['Legrand', '', '004704', 'Minuterie modulaire multifonction, sortie 16 A', 'mn', '0,5 à 12 min, préavis, 1 module', '@lgp/minuterie-modulaire-multifonction-230v-50hz-et-60hz-sortie-16a-250v-1-module'],
+  ['Hager', '', 'EMN001', 'Minuterie simple temporisation', 'mn', '30 s à 10 min, 3 ou 4 fils automatique', '@hgd/EMN001'],
+  ['Hager', '', 'EMN005', 'Minuterie multifonction', 'mn', 'préavis de 40 s, 1 module', 'https://hager.com/intl-fr/produits/catalog/product/download/id/EMN005'],
+  ['Schneider Electric', 'Acti9 MINt', 'CCT15234', 'Minuterie 30 s à 20 min, contact 16 A', 'mn', 'préavis, forçage 1 h par appui long', '@123/schneider-acti9-mint-minuterie-30s-20mn-1h-contact-16a-230vca-schcct15234.html'],
+  ['Schneider Electric', 'Duoline', '16655', 'Minuterie Min’clic 16 A 230 V', 'mn', '1 à 7 min, réglage par molette', '@dm/304-minuterie-duoline-min-clic-16-a-230-v-reglage-par-molette-schneider-electric-16655.html'],
+  // contacteurs jour/nuit
+  ['Legrand', 'CX³', '412501', 'Contacteur jour/nuit 25 A 2F silencieux', 'km', '1 module, manette AUTO / I / 0', '@123/legrand-cx3-contacteur-jour-nuit-25a.html'],
+  ['Legrand', 'CX³', '412502', 'Contacteur jour/nuit 25 A 3F silencieux (triphasé)', 'km', '2 modules', '@123/legrand-cx3-contacteur-jour-nuit-25a-3f-no-silencieux-triphase-412502.html'],
+  ['Hager', '', 'ETC225', 'Contacteur jour/nuit 25 A 2F 230 V', 'km', '1 module, AUTO / I / 0', '@hg/etc225-contacteur-jn-25a-2f-230v'],
+  ['Hager', '', 'ETC225S', 'Contacteur jour/nuit 25 A 2F silencieux', 'km', '', '@123/gamme-materiel-electrique/modules-commande-ecocompteur/contacteur-jour-nuit.html'],
+  ['Hager', '', 'ETC425', 'Contacteur jour/nuit 25 A 4F', 'km', 'tétrapolaire, 2 modules ; en déstockage chez ce distributeur', '@dm/1589-contacteur-double-tarif-jour-nuit-25a-4f-hager-etc425.html'],
+  ['Schneider Electric', 'Acti9 iCT', 'A9C25732', 'Contacteur à commande manuelle 2P 25 A 2 NO 230/240 V', 'km', '2 pas de 9 mm', '@se/A9C25732/'],
+  ['Schneider Electric', 'Resi9', 'R9PCTH20', 'Contacteur heures creuses 2 NO 20 A', 'km', 'phase + neutre, se met sur le peigne Resi9 XP', 'https://medias.descours-cabaud.com/d180001/medias/docus/204/R9PCTH20_document.pdf'],
+  ['Schneider Electric', 'Resi9', 'R9PCTH4', 'Contacteur jour/nuit 25 A 4F tétrapolaire', 'km', '36 mm, forçage', '@123/schneider-resi9-contacteur-jour-nuit-25a-4f-no-tetrapolaire-r9pcth4.html'],
+  // contacteurs de puissance
+  ['Legrand', 'CX³', '412523', 'Contacteur de puissance 25 A 2F', 'kmg', 'sans commande manuelle, 1 module', '@123/marques/legrand/telerupteurs-et-autres-commandes.html'],
+  ['Legrand', 'CX³', '412558', 'Contacteur de puissance 25 A 2F silencieux', 'kmg', 'marche forcée sans retour automatique', '@123/marques/legrand/telerupteurs-et-autres-commandes.html'],
+  ['Legrand', 'CX³', '412524', 'Contacteur de puissance 25 A 2O (2 NF)', 'kmg', '1 module', '@123/marques/legrand/telerupteurs-et-autres-commandes.html'],
+  ['Legrand', 'CX³', '412500', 'Contacteur de puissance 25 A O+F silencieux', 'kmg', 'avec manette, 1 module', '@123/marques/legrand/telerupteurs-et-autres-commandes.html?p=2'],
+  ['Hager', '', 'ESC225', 'Contacteur 25 A 2F 230 V', 'kmg', '1 module, sans manette', '@hgd/ESC225'],
+  ['Schneider Electric', 'Acti9 iCT', 'A9C20732', 'Contacteur 25 A 2 NO 230-240 V CA', 'kmg', '18 mm', '@dm/157629-contacteur-25a-schneider-electric-2no-230-240vca-acti9-ict-schneider-electric-a9c20732.html'],
+  ['Schneider Electric', 'Resi9', 'R9PCTS20', 'Contacteur standard 2 NO 20 A', 'kmg', 'phase + neutre, 230 V', 'https://docs.rs-online.com/2300/0900766b816d932f.pdf'],
+  // interrupteurs horaires
+  ['Legrand', '', '412790', 'Interrupteur horaire analogique journalier, cadran vertical', 'hz', '1 module, 1 NO, réserve de marche', '@lgp/interrupteur-horaire-analogique-modulaire-programmable-manuel-journalier-cadran-vertical-avec-reserve-de-marche'],
+  ['Legrand', 'AlphaRex³', '412631', 'Interrupteur horaire digital journalier ou hebdomadaire, 1 sortie 16 A', 'hz', '1 inverseur, 2 modules', '@lgp/31987-alimentation-230-v-5060-hz/interrupteur-horaire-digital-modulaire-programmable-journaliere-ou-hebdomadaire-1-sortie-16a-250v-alimentation-230v'],
+  ['Legrand', '', '412681', 'Interrupteur horaire programmable journalier et hebdomadaire, 1 sortie 16 A', 'hz', '1 module', '@lgp/interrupteur-horaire-modulaire-programmable-journalier-et-hebdomadaire-standard-230v-1-sortie-16a-1-module'],
+  ['Hager', '', 'EHN011', 'Interrupteur horaire électromécanique journalier 16 A', 'hz', '1 voie, 1 module, avec réserve', '@123/hager-interrupteur-horaire-16a-monophase-electromecanique-1-voie-journalier-avec-reserve-1-module-ehn011.html'],
+  ['Hager', '', 'EGN103', 'Interrupteur horaire électronique 1 voie, 7 jours', 'hz', '1 inverseur, 2 modules, réserve 5 ans', '@hgd/EGN103'],
+  ['Schneider Electric', 'Acti9 IH', '15336', 'Interrupteur horaire électromécanique 24 h, 1 canal', 'hz', '18 mm, réserve de marche', '@dm/497998-interrupteur-horaire-electromeca-acti9-ih-schneider-electric-48-commutations-1-canal-24h-avec-reserve-de-marche-schneider-electric-15336.html'],
+  ['Schneider Electric', 'Acti9 IHP', 'CCT15854', 'Interrupteur horaire numérique 24 h / 7 j, 1 canal', 'hz', '18 mm, bornes sans vis', '@dm/6652-interrupteur-horaire-numerique-acti9-ihp-schneider-electric-56-commutations-1-canal-24h7j-schneider-electric-cct15854.html'],
+  // interrupteurs crépusculaires
+  ['Legrand', '', '412623', 'Interrupteur crépusculaire standard 16 A, cellule fournie', 'cr', 'cellule 412860 IP65, 1 module', '@lgp/interrupteur-crepusculaire-modulaire-standard-sortie-16a-250v-livre-avec-cellule-photoelectrique-1-module'],
+  ['Legrand', '', '412626', 'Interrupteur crépusculaire programmable 16 A, cellule extérieure', 'cr', '2 modules, 1 à 100 000 lux', '@123/marques/legrand/telerupteurs-et-autres-commandes.html?p=2'],
+  ['Hager', '', 'EEN100', 'Interrupteur crépusculaire 1 voie, cellule saillie', 'cr', '5 à 2 000 lux, 10 A, 1 module', 'https://hager.com/intl-fr/catalogue/informations/een100-inter-crep-1-voie-1m-cellule-saillie'],
+  ['Schneider Electric', 'Acti9', 'CCT15482', 'Interrupteur crépusculaire IC100', 'cr', '18 mm', '@dm/53989-interrupteur-crepusculaire-ic100-acti9-schneider-electric-cct15482.html'],
+  ['Schneider Electric', 'Acti9', 'CCT15369', 'Interrupteur crépusculaire IC2000 avec cellule murale', 'cr', '1 NO 16 A, 18 mm', '@123/media/wysiwyg/telechargement/document/Schneider%20Electric_Interrupteurs-cr%C3%A9pusculaire-et-astronomique-IC_CCT15369.pdf'],
+  // délesteurs
+  ['Legrand', '', '412020', 'Délesteur 1 circuit 16 A, seuil 0 à 30 A', 'del', '2 modules', '@lgp/delesteur-modulaire-monophase-1-circuit-deleste-16a-maximum-seuil-de-delestage-reglable-de-0a-a-30a-2-modules'],
+  ['Legrand', '', '412021', 'Délesteur universel monophasé et triphasé, 3 circuits', 'del', '5 modules, 1 TI', '@lgp/delesteur-universel-modulaire-monophase-et-triphase-5-modules'],
+  ['Legrand', 'Drivia with Netatmo', '412172', 'Délesteur connecté, tore fermé 80 A', 'del', '1 module, priorités par appli', '@dm/62062-delesteur-connecte-drivia-with-netatmo-legrand-1-tore-de-mesure-ferme-80a-1-module-legrand-412172.html'],
+  ['Hager', '', '60060', 'Délesteur universel 3 voies tournantes', 'del', 'sorties fil pilote, TI fourni', '@hgd/60060'],
+  ['Delta Dore', '', '6100027', 'Délesteur GP 41 fil pilote', 'del', '3 modules, délestage en cascade', '@dm/42337-delesteur-gp-41-fil-pilote-3-modules-delta-dore-6100027.html'],
+  // télévariateurs
+  ['Legrand', '', '002671', 'Télévariateur multifonction', 'tv', 'LED 3–75 W, 5 fonctions', '@lga/DOCUMENT/CB2022_2023FR_lr-p224.pdf'],
+  ['Legrand', '', '003671', 'Télévariateur 1 000 VA (incandescence, halogène)', 'tv', 'reconnaissance de charge', '@lga/DOCUMENT/CB2022_2023FR_lr-p225.pdf'],
+  ['Hager', '', 'EVN004', 'Télévariateur universel 500 W Confort', 'tv', 'LED 100 W', '@hgd/EVN004'],
+  ['Hager', '', 'EV100', 'Télévariateur universel 1 000 W', 'tv', '', '@hgd/EV100'],
+  ['Schneider Electric', 'Acti9', 'CCTDD20016', 'Télévariateur universel STD400LED 400 W', 'tv', 'LED 60 W, 18 mm', '@123/schneider-acti9-televariateur-universel-400w-std400led-monophase-cctdd20016.html'],
+  // fil pilote
+  ['Legrand', 'DX³', '406258', 'Coupure auxiliaire fil pilote 6 A', 'fpm', 'associée au disjoncteur du chauffage', '@123/marques/legrand/telerupteurs-et-autres-commandes.html'],
+  // sonneries et transformateurs
+  ['Legrand', '', '004101', 'Sonnerie modulaire 8/12 V', 'son', '80/84 dB, 1 module', '@123/marques/legrand/telerupteurs-et-autres-commandes.html'],
+  ['Legrand', '', '004107', 'Sonnerie modulaire 230 V', 'son', '83 dB', '@dm/1365-sonnerie-modulaire-230v-legrand-004107.html'],
+  ['Hager', '', 'SU212', 'Sonnerie modulaire 12 V', 'son', '8–12 V, 5 VA, 18 mm', '@hgd/SU212'],
+  ['Hager', '', 'SU213', 'Sonnerie modulaire 230 V', 'son', '', '@dm/1443-sonnerie-modulaire-230v-hager-su213.html'],
+  ['Schneider Electric', 'Resi9', 'R9PCBB', 'Sonnerie 8/12 V CA, 80 dBA', 'son', '3,6 VA, 18 mm', '@dm/26268-sonnerie-resi9-812-v-ca-36-va-80-dba-schneider-electric-r9pcbb.html'],
+  ['Schneider Electric', 'Resi9', 'R9PCBS', 'Sonnerie 230 V CA, 80 dBA', 'son', '5,5 VA', '@dm/26238-sonnerie-resi9-230-v-ca-55-va-80-dba-schneider-electric-r9pcbs.html'],
+  ['Legrand', '', '413091', 'Transformateur pour sonneries 8 VA, 230 V / 12-8 V', 'trs', '2 modules', '@dm/1361-transformateur-pour-sonneries-8va-legrand-413091.html'],
+  ['Hager', '', 'ST303', 'Transformateur de sonnerie 8 VA, 230 V / 8 à 12 V', 'trs', '2 modules, 1 A au plus, protégé', '@hgd/ST303'],
+  ['Schneider Electric', 'Acti9 iTR', 'A9A15216', 'Transformateur de sonnerie 8 VA, 230 V / 8 et 12 V', 'trs', 'primaire et secondaire isolés, protégé', '@se/A9A15216/'],
+  ['Schneider Electric', 'Acti9 iTR', 'A9A15212', 'Transformateur de sonnerie 16 VA, 230 V / 8 et 12 V', 'trs', '36 mm, protégé', '@dm/26292-transformateur-de-sonnerie-et-ronfleur-acti9-itr-et-resi9-schneider-electric-16-va-230-v-ca-vers-8-et-12-v-ca-schneider-electric-a9a15212.html'],
+  // interrupteurs différentiels
+  ['Legrand', 'DX³-ID', '411611', 'Interrupteur différentiel 40 A 30 mA type AC', 'id', 'arrivée haute, départ haut, bornes à vis, 2 modules', '@lgp/interrupteur-differentiel-dx3-id-arrivee-haute-et-depart-haut-a-vis-2p-230v-40a-typeac-30ma-2-modules'],
+  ['Legrand', 'DX³-ID', '411617', 'Interrupteur différentiel 40 A 30 mA type A', 'id', 'bornes à vis, 2 modules', '@lgp/interrupteur-differentiel-dx3-id-arrivee-haute-et-depart-haut-a-vis-2p-230v-40a-typea-30ma-2-modules'],
+  ['Legrand', 'DX³-ID', '411623', 'Interrupteur différentiel 40 A 30 mA type F (ex-Hpi)', 'id', 'bornes à vis, 2 modules', '@lgp/interrupteur-differentiel-dx3-id-arrivee-haute-et-depart-haut-a-vis-2p-230v-40a-typef-30ma-2-modules'],
+  ['Legrand', 'DX³-ID', '411638', 'Interrupteur différentiel 40 A 30 mA type A, départ automatique', 'id', 'arrivée à vis, départ à bornes automatiques', '@lgp/interrupteur-differentiel-dx3-id-arrivee-haut-a-vis-et-depart-haut-automatique-2p-230v-40a-typea-30ma-2-modules'],
+  ['Legrand', 'DX³-ID', '411650', 'Interrupteur différentiel 63 A 30 mA type AC, départ automatique', 'id', '2 modules', '@lgp/interrupteur-differentiel-dx3-id-arrivee-haut-a-vis-et-depart-haut-automatique-2p-230v-63a-typeac-30ma-2-modules'],
+  ['Schneider Electric', 'Resi9 XP', 'R9PRC240', 'Interrupteur différentiel 40 A 30 mA type AC, peignable', 'id', 'alimentation par le bas', '@se/R9PRC240/'],
+  ['Schneider Electric', 'Resi9 XP', 'R9PRA240', 'Interrupteur différentiel 40 A 30 mA type A, peignable', 'id', 'alimentation par le bas, neutre à gauche', 'https://medias.descours-cabaud.com/d180001/medias/docus/152/R9PRA240_document.pdf'],
+  ['Schneider Electric', 'Resi9 XP', 'R9PRF263', 'Interrupteur différentiel 63 A 30 mA type F-SI, peignable', 'id', 'remplace le R9PRS240 « Asi »', '@se/R9PRF263/'],
+  ['Schneider Electric', 'Resi9 XE', 'R9ERC240', 'Interrupteur différentiel 40 A 30 mA type AC, embrochable', 'id', 'alimentation par le haut', '@se/R9ERC240/'],
+  ['Schneider Electric', 'Resi9 XE', 'R9ERA240', 'Interrupteur différentiel 40 A 30 mA type A, embrochable', 'id', '', '@123/gamme-materiel-electrique/interrupteurs-differentiels/interrupteurs-differentiels-schneider.html'],
+  ['Hager', '', 'CDC742F', 'Interrupteur différentiel 40 A 30 mA type AC, bornes décalées', 'id', 'vis, 2 modules', '@hg/cdc742f-inter-diff-2p-40a-30ma-ac-borne-dec'],
+  ['Hager', '', 'CDS742F', 'Interrupteur différentiel 40 A 30 mA type AC SanVis', 'id', '', '@hg/cds742f-inter-diff-2p-40a-30ma-ac-sanvis'],
+  ['Hager', '', 'CDS743F', 'Interrupteur différentiel 40 A 30 mA type A SanVis', 'id', '', '@123/marques/hager/interrupteurs-differentiels.html'],
+  ['Hager', '', 'CDS740F', 'Interrupteur différentiel 40 A 30 mA type F', 'id', 'bornes hautes QuickBusbar', 'https://assets.hager.com/step-content/P/PDS_321155170501FR/Document/std.lang.all/CDS740F_0501_fr-FR.pdf'],
+  ['Hager', '', 'CDC764F', 'Interrupteur différentiel 63 A 30 mA type AC', 'id', '', '@123/marques/hager/interrupteurs-differentiels.html'],
+  // disjoncteurs
+  ['Legrand', 'DNX³ 4500', '406773', 'Disjoncteur phase + neutre 10 A courbe C', 'dj', '4,5 kA, bornes à vis, 1 module', '@lg/sites/default/files/pdf/69/ca/b8/3245064067737.lite.pdf'],
+  ['Legrand', 'DNX³ 4500', '406774', 'Disjoncteur phase + neutre 16 A courbe C', 'dj', '4,5 kA, bornes à vis, 1 module', '@lgp/disjoncteur-phaseneutre-dnx34500-6ka-arrivee-et-sortie-borne-a-vis-1pn-230v-16a-courbe-c-1-module'],
+  ['Legrand', 'DNX³ 4500', '406783', 'Disjoncteur phase + neutre 16 A courbe C, bornes automatiques', 'dj', '1 module', '@lgp/disjoncteur-phaseneutre-dnx34500-6ka-arrivee-et-sortie-borne-automatique-1pn-230v-16a-courbe-c-1-module'],
+  ['Legrand', 'DNX³ 4500', '406883', 'Disjoncteur phase + neutre 16 A courbe C, arrivée automatique, sortie à vis', 'dj', '1 module', '@lgp/disjoncteur-phaseneutre-dnx34500-6ka-arrivee-borne-automatique-sortie-borne-a-vis-1pn-230v-16a-courbe-c-1-module'],
+  ['Legrand', 'DNX³ 4500', '406787', 'Disjoncteur phase + neutre 32 A courbe C, bornes automatiques', 'dj', 'neutre à gauche', '@lga/NP-FT-GT/F04285FR-01.pdf'],
+  ['Schneider Electric', 'Resi9 XP', 'R9PFC616', 'Disjoncteur 1P+N 16 A courbe C, peignable', 'dj', '3 kA, 18 mm, neutre à gauche', '@se/R9PFC616/'],
+  ['Schneider Electric', 'Resi9 XP', 'R9PFC632', 'Disjoncteur 1P+N 32 A courbe C', 'dj', '3 kA', '@123/marques/schneider/disjoncteurs.html'],
+  ['Schneider Electric', 'Resi9 XE', 'R9EFC616', 'Disjoncteur 1P+N 16 A courbe C, embrochable', 'dj', 'connexions à ressort', '@se/R9EFC616/'],
+  ['Schneider Electric', 'Resi9 XE', 'R9EFC620', 'Disjoncteur 1P+N 20 A courbe C, embrochable', 'dj', '3 kA', '@123/marques/schneider/disjoncteurs.html'],
+  ['Schneider Electric', 'Acti9 iDT40T', 'A9P22616', 'Disjoncteur 1P+N 16 A courbe C', 'dj', '4,5 kA / 6 kA, 18 mm', '@se/A9P22616/'],
+  ['Hager', '', 'MFN716', 'Disjoncteur 1P+N 3 kA courbe C 16 A', 'dj', 'vis, 1 module', '@hg/mfn716-disjoncteur-1pn-3ka-c-16a-1m'],
+  ['Hager', '', 'MFN702', 'Disjoncteur 1P+N 3 kA courbe C 2 A', 'dj', '', '@123/marques/hager/disjoncteurs.html'],
+  ['Hager', '', 'MFN710', 'Disjoncteur 1P+N 3 kA courbe C 10 A', 'dj', '', '@123/marques/hager/disjoncteurs.html'],
+  ['Hager', '', 'MFN720', 'Disjoncteur 1P+N 3 kA courbe C 20 A', 'dj', '', '@123/marques/hager/disjoncteurs.html'],
+  ['Hager', '', 'MFN732', 'Disjoncteur 1P+N 3 kA courbe C 32 A', 'dj', '', '@123/marques/hager/disjoncteurs.html'],
+  ['Hager', '', 'MFS716', 'Disjoncteur 1P+N 3 kA courbe C 16 A, bornes automatiques', 'dj', '', '@123/marques/hager/disjoncteurs.html'],
+  ['Hager', '', 'MJT716', 'Disjoncteur 1P+N 4,5 kA courbe C 16 A', 'dj', 'vis, 1 module', '@hg/mjt716-disj-1p-n-4-5-6ka-c-16a-1m'],
+  ['Legrand', 'DX³', '410705', 'Disjoncteur différentiel 16 A 30 mA type AC', 'dd', '', '@123/gamme-materiel-electrique/disjoncteurs-differentiels/disjoncteurs-differentiels-legrand.html'],
+  ['Schneider Electric', 'Resi9', 'R9PDCF10', 'Disjoncteur différentiel 1P+N 10 A 30 mA type F-SI', 'dd', 'courbe C, bornes à vis', '@se/R9PDCF10/'],
+  // disjoncteurs de branchement
+  ['Legrand', '', '092870', 'Disjoncteur de branchement 500 mA sélectif, 15, 30 ou 45 A', 'agcp', '4 modules, tarif bleu', 'https://www.legrand.fr/catalogue/disjoncteur-general/disjoncteur-de-branchement-enedis-tarif-bleu-500ma-selectif-15a-ou-30a-ou-45a'],
+  ['Legrand', '', '401003', 'Disjoncteur d’abonné 45 A 500 mA sélectif', 'agcp', '', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'],
+  ['Legrand', 'Baco', '401000', 'Disjoncteur d’abonné 15/30/45 A 500 mA instantané', 'agcp', '', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'],
+  ['Legrand', 'Baco', '401051', 'Disjoncteur d’abonné 60 A 500 mA instantané', 'agcp', '', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'],
+  ['Schneider Electric', 'Resi9 DB60', 'R9FS645', 'Disjoncteur de branchement 1P+N 15/30/45 A 500 mA sélectif', 'agcp', 'type A', '@se/R9FS645/'],
+  ['Schneider Electric', 'Resi9 DB60', 'R9FT645', 'Disjoncteur de branchement 15/30/45 A 500 mA instantané', 'agcp', '', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'],
+  ['Schneider Electric', 'Resi9 DB60', 'R9FS660', 'Disjoncteur de branchement 60 A 500 mA sélectif', 'agcp', '', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'],
+  ['Hager', '', 'HDA245S', 'Disjoncteur d’abonné 15/45 A 500 mA sélectif', 'agcp', '', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'],
+  ['Hager', '', 'HDA260SF', 'Disjoncteur d’abonné 60 A 500 mA sélectif', 'agcp', '', '@123/gamme-materiel-electrique/branchement-edf/disjoncteurs-de-branchement.html'],
+  // parafoudres
+  ['Legrand', '', '092766', 'Parafoudre pour logement avec protection intégrée', 'pf', 'type 2, In 10 kA, Up 1,2 kV, 2 modules', 'https://www.legrand.fr/catalogue/contacteur-minuterie-parafoudre/parafoudre-modulaire-pour-logement-avec-protection-integree-2-modules'],
+  ['Legrand', '', '003951', 'Parafoudre monophasé débrochable autoprotégé type 2 12 kA', 'pf', '', '@123/gamme-materiel-electrique/parafoudres.html'],
+  ['Legrand', '', '003971', 'Parafoudre monophasé autoprotégé type 2 12 kA', 'pf', '', '@123/gamme-materiel-electrique/parafoudres.html'],
+  ['Schneider Electric', 'Resi9', 'R9PLC', 'Parafoudre combi 10 kA 1P+N avec accessoires', 'pf', 'câble de terre prémonté', '@se/R9PLC/'],
+  ['Schneider Electric', 'Resi9', 'R9PLS', 'Parafoudre combi 10 kA 1P+N sans accessoires', 'pf', '', '@se/R9PLS/'],
+  // interrupteurs-sectionneurs
+  ['Legrand', 'DX³', '406440', 'Interrupteur-sectionneur bipolaire 40 A', 'is', '', '@123/gamme-materiel-electrique/interrupteur-sectionneur.html'],
+  ['Legrand', 'DX³', '406441', 'Interrupteur-sectionneur bipolaire 63 A', 'is', '', '@123/gamme-materiel-electrique/interrupteur-sectionneur.html'],
+  ['Schneider Electric', 'Acti9 iSW', 'A9S65263', 'Interrupteur-sectionneur 2P 63 A', 'is', '', '@se/A9S65263/'],
+  ['Schneider Electric', 'Acti9 iSW NA', 'A9S70640', 'Interrupteur-sectionneur 1P+N 40 A', 'is', '', '@se/A9S70640/'],
+  ['Hager', '', 'SBN240', 'Interrupteur-sectionneur 2 × 40 A', 'is', 'brochure Hager (tableau peu lisible : vérifie la fiche produit)', 'https://assets.hager.com/step-content/P/HA_39814339/Document/std.lang.all/OAV165_Hager_Brochure_EssentielsTertiaire2022.pdf'],
+  ['Hager', '', 'SBN263', 'Interrupteur-sectionneur 2 × 63 A', 'is', 'brochure Hager (tableau peu lisible : vérifie la fiche produit)', 'https://assets.hager.com/step-content/P/HA_39814339/Document/std.lang.all/OAV165_Hager_Brochure_EssentielsTertiaire2022.pdf'],
+  // prises et voyants modulaires
+  ['Legrand', '', '092782', 'Prise de courant modulaire 2P+T 16 A', 'pmod', '2,5 modules, alimentation par le bas', 'https://www.legrand.fr/catalogue/signalisation-et-prise/prise-de-courant-modulaire-avec-terre-10a-et-16a-25-modules'],
+  ['Schneider Electric', 'Acti9 iPC', 'A9A15307', 'Prise de courant modulaire 2P+T 16 A avec voyant', 'pmod', 'standard français', '@se/A9A15307/'],
+  ['Legrand', '', '092707', 'Voyant de signalisation LED vert', 'vy', '230 V, 1 module', 'https://www.legrand.fr/catalogue/signalisation-et-prise/voyant-de-signalisation-led-vert-1-module'],
+  ['Legrand', '', '092708', 'Voyant de signalisation LED rouge', 'vy', '230 V, 1 module', 'https://www.legrand.fr/catalogue/signalisation-et-prise/voyant-de-signalisation-led-rouge-1-module'],
+  ['Schneider Electric', 'Acti9 iIL', 'A9E18320', 'Voyant lumineux simple rouge 110-230 V CA', 'vy', '', '@se/A9E18320/'],
+  // peignes
+  ['Legrand', 'VX³', '405000', 'Peigne d’alimentation verticale, coffret 2 rangées de 13 modules', 'peigne', 'tarif bleu monophasé', 'https://www.legrand.fr/catalogue/peigne-et-accessoires-de-raccordement/peigne-dalimentation-verticale-pour-coffret-2-rangees-de-13-modules'],
+  ['Legrand', 'HX³', '092793', 'Peigne d’alimentation horizontale Uni et Uni + neutre, 13 modules', 'peigne', 'sécable', 'https://www.legrand.fr/catalogue/peigne-et-accessoires-de-raccordement/peigne-dalimentation-horizontale-pour-uni-et-uni-neutre-13-modules'],
+  ['Legrand', 'DX³', '406300', 'Module de raccordement par peigne, 2P jusqu’à 63 A', 'peigne', 'borne automatique, 1 module', '@lgp/module-de-raccordement-par-peigne-pour-dx3-dx3-id-et-dx3-is-a-borne-automatique-2p-jusqua-63a-1-module'],
+  ['Schneider Electric', 'Resi9 XP', 'R9PXV', 'Peigne vertical pour interrupteur différentiel 2P, 25 à 63 A', 'peigne', 'entraxe 125 mm', '@se/R9PXV/'],
+  ['Schneider Electric', 'Resi9 XP', 'R9PXH213', 'Peigne monobloc 1P+N 63 A, 13 modules', 'peigne', '', '@se/R9PXH213/'],
+  ['Schneider Electric', 'Resi9 XE', 'R9EXV', 'Peigne vertical pour interrupteur différentiel XE', 'peigne', '', '@se/R9EXV/'],
+  ['Schneider Electric', 'Resi9 XE', 'R9EXHC13', 'Répartiteur embrochable 13 modules', 'peigne', 'avec connecteur', '@se/R9EXHC13/'],
+  ['Hager', '', 'KB163P', 'Barre de pontage unipolaire, isolant marron (phase)', 'peigne', 'pour disjoncteurs 1 Ph + N', 'https://assets.hager.com/step-content/P/HA_39814339/Document/std.lang.all/OAV165_Hager_Brochure_EssentielsTertiaire2022.pdf'],
+  ['Hager', '', 'KB163N', 'Barre de pontage unipolaire, isolant bleu (neutre)', 'peigne', 'pour disjoncteurs 1 Ph + N', 'https://assets.hager.com/step-content/P/HA_39814339/Document/std.lang.all/OAV165_Hager_Brochure_EssentielsTertiaire2022.pdf'],
+  // va-et-vient
+  ['Legrand', 'Mosaic', '077011L', 'Interrupteur ou va-et-vient 10 AX, 2 modules', 'vv', '', '@lgp/38050-va-et-vient-2-modules/interrupteur-ou-va-et-vient-10ax-250v-mosaic-2-modules-blanc'],
+  ['Legrand', 'Mosaic', '077001L', 'Va-et-vient étroit (1 module)', 'vv', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-mosaic/mecanismes-legrand-mosaic.html'],
+  ['Legrand', 'Céliane', 'CM0001', 'Interrupteur va-et-vient', 'vv', '10 A 250 V, bornes automatiques, dénudage 12 mm', '@123/legrand-celiane-interrupteur-va-et-vient-cm0001.html'],
+  ['Legrand', 'Dooxie', '600001', 'Interrupteur va-et-vient', 'vv', '10 AX, bornes automatiques 2 × 2,5 mm²', '@123/legrand-dooxie-interrupteur-va-et-vient-blanc-600001.html'],
+  ['Schneider Electric', 'Odace', 'S520204', 'Va-et-vient 10 A', 'vv', '3 bornes sans vis, dénudage 12 mm', '@123/media/wysiwyg/telechargement/document/Schneider%20Electric_Odace_S520204.pdf'],
+  ['Schneider Electric', 'Odace (2025)', 'S920204N', 'Va-et-vient / interrupteur / poussoir avec neutre 10 AX', 'vv', 'devient poussoir ; 2 bornes de neutre', '@dm/504176-va-et-vient-interrupteur-poussoir-odace-schneider-electric-avec-neutre-10ax-avec-enjoliveur-blanc--schneider-electric-s920204n.html'],
+  ['Schneider Electric', 'Unica', 'NU310318F', 'Va-et-vient 1 module 10 AX', 'vv', 'connexion automatique', '@dm/35473-va-et-vient-unica-1-module-10ax-blanc-schneider-electric-nu310318f.html'],
+  ['Hager', 'gallery', 'WXF001', 'Interrupteur va-et-vient 2 modules', 'vv', '10 A', '@hg/wxf001-inter-v-v-gallery-2m'],
+  ['Hager', 'gallery', 'WXF003', 'Va-et-vient InterBP Duo avec neutre', 'vv', 'devient poussoir avec un tournevis', '@dm/57240-va-et-vient-hager-gallery-interbp-duo-avec-neutre-composable-hager-wxf003.html'],
+  ['Legrand', 'Dooxie', '600002', 'Interrupteur double va-et-vient', 'dvv', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Schneider Electric', 'Odace', 'S520214', 'Double va-et-vient 10 A', 'dvv', '6 bornes sans vis, dénudage 12 mm', '@123/media/wysiwyg/telechargement/document/Odace_S520214.pdf'],
+  ['Schneider Electric', 'Odace (2025)', 'S920214', 'Double va-et-vient / interrupteur / poussoir sans neutre', 'dvv', '', '@dm/nouvelle-gamme-odace'],
+  ['Schneider Electric', 'Unica', 'NU321318F', 'Double va-et-vient 2 modules 10 AX', 'dvv', 'connexion automatique', '@dm/35460-double-va-et-vient-unica-2-modules-10ax-blanc-schneider-electric-nu321318f.html'],
+  // permutateurs
+  ['Legrand', 'Mosaic', '077021L', 'Permutateur 10 A', 'perm', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-mosaic/mecanismes-legrand-mosaic.html'],
+  ['Legrand', 'Dooxie', '600037', 'Permutateur 10 AX', 'perm', '', '@lgp/permutateur-dooxie-10ax-250v-finition-blanc'],
+  ['Legrand', 'Céliane', 'CM0005', 'Permutateur 10 AX', 'perm', 'bornes à vis 2 × 2,5 mm², dénudage 9 mm', '@lga/NP-FT-GT/F03992FR-02.pdf'],
+  ['Schneider Electric', 'Odace', 'S520205', 'Permutateur 10 A', 'perm', '4 bornes, dénudage 12 mm', '@123/media/wysiwyg/telechargement/document/Schneider%20Electric_Interrupteurs-et-prises-Odace_S520205.pdf'],
+  ['Schneider Electric', 'Odace (2025)', 'S920205', 'Permutateur', 'perm', '', '@dm/nouvelle-gamme-odace'],
+  ['Schneider Electric', 'Unica', 'NU320518', 'Permutateur 10 A, 2 modules', 'perm', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-schneider/interrupteurs-et-prises-schneider-unica.html'],
+  ['Hager', 'gallery', 'WXF010', 'Permutateur 10 A, 2 modules', 'perm', '', '@hg/wxf010-permutateur-gallery-2m'],
+  // boutons-poussoirs
+  ['Legrand', 'Mosaic', '077040L', 'Bouton-poussoir', 'bp', '6 A, 2 modules, dénudage 13 mm', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-mosaic/mecanismes-legrand-mosaic.html'],
+  ['Legrand', 'Mosaic', '077043L', 'Poussoir ou poussoir inverseur avec porte-étiquette 6 A', 'bp', '2 modules', '@lgp/poussoir-ou-poussoir-inverseur-avec-porte-etiquette-mosaic-easy-led-6a-250v-2-modules-blanc-antimicrobien'],
+  ['Legrand', 'Dooxie', '600016', 'Bouton-poussoir lumineux', 'bp', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Legrand', 'Céliane', 'CM0031', 'Bouton-poussoir', 'bp', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-celiane/mecanismes-legrand-celiane.html'],
+  ['Schneider Electric', 'Odace', 'S520206', 'Poussoir 10 A', 'bp', '2 bornes, dénudage 12 mm', 'https://batpro-madagascar.com/wp-content/uploads/2020/08/Odace_S520206.pdf'],
+  ['Schneider Electric', 'Unica', 'NU310618N', 'Bouton-poussoir avec voyant NO 10 A, 1 module', 'bp', '', '@dm/35535-bouton-poussoir-avec-voyant-no-unica-1-module-10a-blanc-schneider-electric-nu310618n.html'],
+  // interrupteurs à voyant
+  ['Legrand', 'Mosaic / Céliane', '067686L', 'Voyant lumineux 230 V à clipser (repérage)', 'voyant', '0,041 W', '@lga/DOCUMENT/CB2022_2023FR_lr-p1101.pdf'],
+  ['Legrand', 'Mosaic / Céliane', '067685L', 'Voyant témoin 230 V à clipser', 'voyant', '0,39 W', '@lga/DOCUMENT/CB2022_2023FR_lr-p1101.pdf'],
+  ['Legrand', 'Dooxie', '600009', 'Interrupteur va-et-vient à voyant témoin', 'voyant', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Legrand', 'Dooxie', '600011', 'Interrupteur va-et-vient lumineux', 'voyant', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Schneider Electric', 'Odace (2025)', 'S920263', 'Va-et-vient ou poussoir lumineux, LED verte 0,15 mA', 'voyant', '', 'https://www.batirmoinscher.com/appareillage-electrique/interrupteur-prise-schneider-odace/mecanisme-odace-2025-schneider.html'],
+  ['Schneider Electric', 'Unica', 'NU310318S', 'Va-et-vient lumineux 1 module', 'voyant', 'livré sans lampe', '@123/schneider-unica-va-et-vient-lumineux-1-module-mecanisme-blanc-nu310318s.html'],
+  ['Hager', 'gallery', 'WXF023', 'Inverseur à voyant InterBP Duo', 'voyant', '', '@dm/3184-mecanisme-hager-gallery'],
+  // variateurs
+  ['Legrand', 'Mosaic', '078407A', 'Variateur universel 2 fils sans neutre 125 W LED', 'var', '2 modules, dénudage 8 mm', '@lgp/interrupteur-variateur-mosaic-universel-2-fils-sans-neutre-125w-led-2-modules-blanc'],
+  ['Legrand', 'Dooxie', '600060A', 'Variateur universel 2 fils', 'var', 'LED 3–125 W, 10 lampes au plus', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Legrand', 'Dooxie', '600066A', 'Variateur universel 3 fils 150 W', 'var', 'LED 0–150 W, 15 lampes au plus', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Legrand', 'Céliane', 'CM0060', 'Variateur 2 fils', 'var', '125 W au plus', '@123/legrand-celiane-interrupteur-variateur-2-fils-cm0060.html'],
+  ['Schneider Electric', 'Odace (2025)', 'S920519', 'Variateur universel 2 ou 3 fils, rotatif', 'var', 'remplaçant du S520512 (arrêté fin 2021), d’après la fiche se.com de l’ancien modèle', '@se/S520512/odace---variateur-universel---blanc---led-4-00w'],
+  ['Schneider Electric', 'Unica', 'NU351418', 'Variateur rotatif universel', 'var', 'bornes à vis', 'https://batpro-madagascar.com/wp-content/uploads/2026/05/48198-VARIATEUR-ROTATIF-UNIVERSEL-BLANC-UNICA-NU351418.pdf'],
+  ['Hager', 'gallery', 'WXF062', 'Variateur rotatif 2 modules', 'var', 'LED 70 W au plus, auto-apprentissage', 'https://assets.hager.com/step-content/P/PDS_393831970501FR/Document/std.lang.all/WXF062_0501_fr-FR.pdf'],
+  // détecteurs
+  ['Legrand', 'Mosaic', '078458A', 'Détecteur mural universel 2 fils sans neutre 100 W LED', 'det', '170°, 8 m, 2 modules', '@lgp/detecteur-mural-universel-mosaic-2-fils-sans-neutre-a-detection-infrarouge-100w-led-2-modules-blanc'],
+  ['Legrand', 'Dooxie', '600064A', 'Détecteur de mouvement et de présence mural 2 fils', 'det', '170°', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Legrand', 'Dooxie', '600061A', 'Détecteur mural 3 fils', 'det', '500 W LED', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Legrand', 'Céliane', 'CM0050', 'Détecteur mural 2 fils sans neutre', 'det', '100 W LED, 170°, 8 m', '@123/legrand-celiane-detecteur-mural-2-fils-sans-neutre-cm0050.html'],
+  ['Schneider Electric', 'Odace', 'S520524', 'Détecteur de présence et de mouvement 2 fils, spécial réno', 'det', '112°', '@123/media/wysiwyg/telechargement/document/S520524.pdf'],
+  ['Hager', 'gallery', 'WXF052', 'Interrupteur automatique 2 fils sans neutre', 'det', '12 m en face', '@hg/wxf052-interrupteur-automatique-gallery-2-fils'],
+  // volets roulants
+  ['Legrand', 'Mosaic', '077026', 'Interrupteur volets roulants', 'vrs', 'bornes automatiques', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-mosaic/mecanismes-legrand-mosaic.html'],
+  ['Legrand', 'Dooxie', '600021', 'Interrupteur volets roulants', 'vrs', '6 AX, bornes automatiques 2 × 2,5 mm²', '@123/legrand-dooxie-interrupteur-volets-roulants-blanc-600021.html'],
+  ['Legrand', 'Céliane', 'CM0043', 'Interrupteur volets roulants et stores', 'vrs', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-celiane/mecanismes-legrand-celiane.html?p=2'],
+  ['Schneider Electric', 'Odace (2025)', 'S920208', 'Interrupteur / poussoir volets roulants à levier, blanc', 'vrs', '6 AX, verrouillage mécanique et électrique (fiche de la version noire S940208)', '@dm/nouvelle-gamme-odace'],
+  ['Schneider Electric', 'Unica', 'NU320818', 'Interrupteur volet roulant 3 touches, 2 modules', 'vrs', '6 A, bornes automatiques', '@123/schneider-unica-inter-volet-roulant-3-touches-2-modules-mecanisme-blanc-nu320818.html'],
+  ['Hager', 'gallery', 'WXF300', 'Interrupteur pour volets roulants inverseur, 2 modules', 'vrs', '', '@dm/3184-mecanisme-hager-gallery'],
+  // prises
+  ['Legrand', 'Mosaic', '077111L', 'Prise de courant 2P+T Surface', 'pc', 'bornes automatiques, éclips', '@123/legrand-mosaic-prise-de-courant-2p-t-surface-blanc-077111l.html'],
+  ['Legrand', 'Dooxie', '600341', 'Prise de courant 2P+T Surface avec USB type C', 'usb', '16 A 250 V', '@123/legrand-dooxie-prise-de-courant-2p-t-surface-avec-prise-usb-type-c-blanc-600341.html'],
+  ['Legrand', 'Céliane', 'CM0111', 'Prise de courant 2P+T', 'pc', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-celiane/mecanismes-legrand-celiane.html'],
+  ['Schneider Electric', 'Odace (2025)', 'S920052', 'Prise de courant 2P+T affleurante', 'pc', '16 A, bornes automatiques', '@123/schneider-odace-prise-de-courant-2p-t-affleurante-blanc-craie-s920052.html'],
+  ['Schneider Electric', 'Odace (2025)', 'S920049', 'Prise de courant 2P+T rénovation à puits', 'pc', '', 'https://www.batirmoinscher.com/appareillage-electrique/interrupteur-prise-schneider-odace/mecanisme-odace-2025-schneider.html'],
+  ['Schneider Electric', 'Unica', 'NU305918', 'Prise 2P+T à raccordement rapide', 'pc', 'bornes sans vis jusqu’à 2,5 mm²', '@123/schneider-unica-prise-2p-t-raccord-rapide-mecanisme-blanc-nu305918.html'],
+  ['Hager', 'gallery', 'WXF106', 'Prise de courant 2P+T affleurante 16 A', 'pc', 'éclips, IK05', '@hgd/WXF106'],
+  // sorties de câble
+  ['Legrand', 'Dooxie', '600325', 'Sortie de câble', 'sdc', 'bornes à vis, 3 × 2,5 mm², câble de 12 mm au plus', '@123/legrand-dooxie-sortie-de-cable-blanc-600325.html'],
+  ['Legrand', 'Mosaic', '077551', 'Sortie de câbles 10 A avec borniers et serre-câbles', 'sdc', '2 modules', '@lgp/sortie-de-cables-10a-mosaic-2-modules-avec-borniers-et-serre-cables-blanc'],
+  ['Legrand', 'Céliane', 'CM0181', 'Sortie de câble avec serre-câbles', 'sdc', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-celiane/mecanismes-legrand-celiane.html?p=2'],
+  ['Schneider Electric', 'Odace (2025)', 'S920662', 'Sortie de câble avec serre-câbles', 'sdc', '16 A', '@123/schneider-odace-sortie-de-cable-avec-serre-cables-blanc-craie-s920662.html'],
+  ['Schneider Electric', 'Odace', 'S925662', 'Sortie de câble avec serre-câbles et griffes', 'sdc', '3 bornes 2,5 mm², pour fil pilote', 'https://docs.rs-online.com/20ae/A700000014580130.pdf'],
+  ['Hager', 'gallery', 'WXF155', 'Sortie de câble 2 modules', 'sdc', '', '@hgd/WXF155'],
+  // thermostats, sonnette, communication, bipolaires
+  ['Legrand', 'Céliane (ancienne)', '067053', 'Interrupteur horaire programmable', 'thm', 'ordres confort / réduit sur fil pilote', '@lga/DOCUMENT/cm222600_0658.pdf'],
+  ['Hager', 'gallery', 'WXF315', 'Thermostat électronique', 'thm', '5 à 30 °C, 230 V', '@hgd/WXF315'],
+  ['Schneider Electric', 'Odace', 'S520246', 'Bouton-poussoir carillon', 'bps', 'symbole cloche ; ne va pas avec Odace 2025', '@123/schneider-odace-bouton-poussoir-carillon-blanc-s520246.html'],
+  ['Legrand', 'Dooxie', '600018', 'Bouton-poussoir lumineux avec marquage sonnette', 'bps', '', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Hager', 'gallery', 'WXF228', 'Prise RJ45 cat. 6 STP grade 3TV', 'rj', '', '@dm/3184-mecanisme-hager-gallery'],
+  ['Schneider Electric', 'Odace (2025)', 'S920476', 'Prise RJ45 cat. 6 STP grade 2TV à 3TV', 'rj', '', 'https://www.batirmoinscher.com/appareillage-electrique/interrupteur-prise-schneider-odace/mecanisme-odace-2025-schneider.html'],
+  ['Legrand', 'Mosaic', '076566', 'Prise RJ45 catégorie 6 STP', 'rj', 'prise TV : 078782', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-mosaic/mecanismes-legrand-mosaic.html'],
+  ['Legrand', 'Dooxie', '600375', 'Prise RJ45 catégorie 6 STP', 'rj', 'prise TV : 600351', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-dooxie/mecanismes-legrand-dooxie.html?p=2'],
+  ['Legrand', 'Céliane', 'CM0345', 'Prise RJ45 catégorie 6', 'rj', 'prise TV : CM0380', '@123/interrupteurs-et-prises/interrupteurs-et-prises-legrand/legrand-celiane/mecanismes-legrand-celiane.html'],
+  ['Schneider Electric', 'Unica', 'NU341718', 'Prise RJ45 cat. 6 STP, 2 modules', 'rj', 'prise TV : NU346218', '@123/interrupteurs-et-prises/interrupteurs-et-prises-schneider/interrupteurs-et-prises-schneider-unica.html'],
+  ['Legrand', 'Céliane', 'CM0020', 'Interrupteur bipolaire 16 AX', 'bip', 'bornes à vis, dénudage 9 mm', '@lga/NP-FT-GT/F04019FR-01.pdf'],
+  ['Hager', 'gallery', 'WXF008', 'Interrupteur bipolaire 10 A, 2 modules', 'bip', '', 'https://assets.hager.com/step-content/P/PDS_155948090044FR/Document/std.lang.all/WXF008_0044_fr-FR.pdf'],
+  // bornes Wago
+  ['WAGO', '221', '221-412', 'Borne à leviers 2 conducteurs, 4 mm²', 'w221', '0,2–4 mm² (souple dès 0,14), 32 A 450 V, dénudage 11 mm', '@of/539e8250-fefb-497a-9ca0-5df94ea29853/WAGO_221-412fr.pdf'],
+  ['WAGO', '221', '221-413', 'Borne à leviers 3 conducteurs, 4 mm²', 'w221', '32 A 450 V, dénudage 11 mm', 'https://www.wago.com/fr/produits/technique-de-raccordement/bornes-de-raccordement-221'],
+  ['WAGO', '221', '221-415', 'Borne à leviers 5 conducteurs, 4 mm²', 'w221', '32 A 450 V, dénudage 11 mm', 'https://www.wago.com/fr/produits/technique-de-raccordement/bornes-de-raccordement-221'],
+  ['WAGO', '221', '221-612', 'Borne à leviers 2 conducteurs, 6 mm²', 'w221', '0,5–6 mm², 41 A 450 V, dénudage 12–14 mm', '@of/78f3fe82-bf50-4634-8a22-fb825a00ee9c/WAGO_221-612fr.pdf'],
+  ['WAGO', '221', '221-613', 'Borne à leviers 3 conducteurs, 6 mm²', 'w221', '0,5–6 mm²', 'https://www.wago.com/fr/produits/technique-de-raccordement/bornes-de-raccordement-221'],
+  ['WAGO', '221', '221-615', 'Borne à leviers 5 conducteurs, 6 mm²', 'w221', '41 A 450 V', '@of/e2cff57b-7cfe-4fc2-92e6-93ec3988d915/WAGO_221-615_995-006fr.pdf'],
+  ['WAGO', '221', '221-2411', 'Borne inline à leviers (1 entrée, 1 sortie), 4 mm²', 'w221', '32 A 450 V, dénudage 11 mm', '@of/726ad02d-2bc1-47d9-9d45-a2c0f3b7aaaf/WAGO_221-2411fr.pdf'],
+  ['WAGO', '2273', '2273-202', 'Borne de boîte de dérivation 2 conducteurs rigides', 'w2273', '0,5–2,5 mm², 24 A, dénudage 11 mm, couvercle blanc', 'https://www.wago.com/fr/bornes-d-installation/bornes-pour-bo%C3%AEtes-de-d%C3%A9rivation/p/2273-202'],
+  ['WAGO', '2273', '2273-203', 'Borne de boîte de dérivation 3 conducteurs rigides', 'w2273', 'couvercle orange', 'https://www.wago.com/fr/bornes-d-installation/bornes-pour-bo%C3%AEtes-de-d%C3%A9rivation/p/2273-203'],
+  ['WAGO', '2273', '2273-204', 'Borne de boîte de dérivation 4 conducteurs rigides', 'w2273', 'couvercle rouge', 'https://www.wago.com/fr/bornes-d-installation/bornes-pour-bo%C3%AEtes-de-d%C3%A9rivation/p/2273-204'],
+  ['WAGO', '2273', '2273-205', 'Borne de boîte de dérivation 5 conducteurs rigides', 'w2273', 'couvercle jaune', 'https://cdn.chausson.fr/catalog-document/116b0889-56d6-47f3-982c-7502f19eca19/wago-2273-205fr.pdf'],
+  ['WAGO', '2273', '2273-208', 'Borne de boîte de dérivation 8 conducteurs rigides', 'w2273', 'couvercle gris clair', 'https://cdn.chausson.fr/catalog-document/2ce7956b-aaa4-4498-b5a5-0b45d3ae8a63/wago-2273-208fr.pdf'],
+  ['WAGO', '2773', '2773-2401', 'Borne inline PUSH WIRE 4 mm²', 'w2773', 'rigide 0,75–4 mm², 32 A', '@of/d9a5c459-b73a-436b-ab74-36592eb1f8b8/WAGO_2773-2401fr.pdf'],
+  ['WAGO', '2773', '2773-404', 'Borne PUSH WIRE 4 conducteurs, 4 mm²', 'w2773', '32 A, dénudage 13 mm (fiche distributeur)', 'https://rapidonline.com/wago-2773-404-wago-4mm-32a-4-conductor-pushwire-connector-21-5334'],
+  // boîtes
+  ['Legrand', 'Plexo', '092002', 'Boîte de dérivation ronde Ø70 × 45', 'bdd', 'IP55, 4 embouts', '@lga/DOCUMENT/CB2022_2023FR_lr-p774.pdf'],
+  ['Legrand', 'Plexo', '092005', 'Boîte de dérivation carrée 65 × 65 × 40', 'bdd', 'IP55, 7 embouts', '@lga/DOCUMENT/CB2022_2023FR_lr-p774.pdf'],
+  ['Legrand', 'Plexo', '092012', 'Boîte de dérivation carrée 80 × 80 × 45', 'bdd', 'IP55, IK07, 7 embouts (Ø4 à 20 mm)', '@123/legrand-plexo-boite-de-derivation-etanche-ip55-80x80x45-gris-092012.html'],
+  ['Legrand', 'Plexo', '092022', 'Boîte de dérivation carrée 105 × 105 × 55', 'bdd', 'IP55, 7 embouts (Ø4 à 25 mm)', '@lgp/boite-de-derivation-carree-plexo-dimensions-105x105x55mm-gris-ral7035'],
+  ['Legrand', 'Plexo', '092032', 'Boîte de dérivation carrée 130 × 130 × 74', 'bdd', 'IP55, 10 embouts', '@lga/DOCUMENT/CB2022_2023FR_lr-p774.pdf'],
+  ['Legrand', 'Plexo', '092042', 'Boîte de dérivation rectangulaire 155 × 110 × 74', 'bdd', 'IP55, 10 embouts', '@lgp/boite-de-derivation-rectangulaire-plexo-dimensions-155x110x74mm-gris-ral7035'],
+  ['Legrand', 'Plexo', '092052', 'Boîte de dérivation rectangulaire 180 × 140 × 86', 'bdd', 'IP55, 10 embouts (Ø4 à 32 mm)', '@lga/DOCUMENT/CB2022_2023FR_lr-p774.pdf'],
+  ['Legrand', 'Plexo', '092062', 'Boîte de dérivation rectangulaire 220 × 170 × 86', 'bdd', 'IP55, 14 embouts', '@lga/DOCUMENT/CB2022_2023FR_lr-p774.pdf'],
+  ['Schneider Electric', 'Mureva Box', 'ENN05001', 'Boîte de dérivation ronde Ø60', 'bdd', '4 entrées Ø20, IK07', 'https://docs.rs-online.com/8f18/A700000015907885.pdf'],
+  ['Schneider Electric', 'Mureva Box', 'ENN05002', 'Boîte de dérivation 65 × 65 × 45', 'bdd', '4 entrées Ø20', 'https://www.anjou-connectique.com/media/files/14208/05002-fiche-technique.pdf'],
+  ['Schneider Electric', 'Mureva Box', 'ENN05004', 'Boîte de dérivation 80 × 80 × 45', 'bdd', '7 entrées Ø20, IK07', '@se/ENN05004/'],
+  ['Schneider Electric', 'Mureva Box', 'ENN05007', 'Boîte de dérivation 150 × 105 × 80', 'bdd', '10 entrées Ø25, IK07', 'https://docs.rs-online.com/ed0c/A700000014513885.pdf'],
+  ['Iboco (groupe Hager)', 'Pico', 'B05536', 'Boîte de dérivation 150 × 110 × 70', 'bdd', 'IP55, IK07, 10 entrées', 'https://iboco.fr/catalogue/produits/b05536-bdd-150x110-g-boite-deriv-pico'],
+  ['Legrand', 'Batibox', '089272', 'Boîte de dérivation maçonnerie 120 × 120 × 40', 'bat', '', '@lgp/boite-complete-batibox-maconnerie-pour-derivation-rectangulaire-120x120x40mm'],
+  ['Legrand', 'Batibox', '089371', 'Boîte de dérivation cloison sèche Ø85 × 40, couvercle 100 × 100', 'bat', '', '@lgp/boite-pour-derivation-batibox-cloisons-seches-o85x40mm-couvercle-100x100mm'],
+  ['Legrand', 'Batibox', '089373', 'Boîte de dérivation cloison sèche 160 × 105 × 40', 'bat', 'couvercle 190 × 135', '@lgp/boite-pour-derivation-batibox-cloisons-seches-160x105x40mm-couvercle-190x135mm'],
+  ['Legrand', 'Batibox', '089337', 'Boîte luminaire cloison sèche, couvercle DCL, point de centre', 'dcl', '', '@lgp/boite-luminaire-batibox-cloisons-seches-couvercle-dcl-pour-point-de-centre'],
+  ['Legrand', 'Batibox', '089334', 'Kit point de centre cloison sèche Ø67 × 50 avec douille et fiche DCL', 'dcl', '', 'https://www.legrand.fr/sites/default/files/pdf/13/87/d7/3245060893347.lite.pdf'],
+  ['Legrand', 'Batibox', '089237', 'Boîte DCL maçonnerie Ø65 × 50', 'dcl', 'luminaire jusqu’à 25 kg, 6 A, dénudage 9 mm', '@lga/NP-FT-GT/F02092FR-00.pdf'],
+];
+</script>
+<script>
+/* ------------------------------------------------------------ recherche dans la base (par référence ou par nom) */
+function normTxt(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/³/g, '3').replace(/[’'`]/g, ' ')
+    .replace(/[^a-z0-9+]+/g, ' ').trim();
+}
+function refKey(s) { return String(s || '').toLowerCase().replace(/³/g, '3').replace(/[^a-z0-9]/g, ''); }
+var APPDB = (function () {
+  var types = {};
+  Object.keys(APP_TYPES).forEach(function (id) {
+    var t = APP_TYPES[id]; t.id = id;
+    t.hay = ' ' + normTxt([t.name, t.alias, (APP_CATS.filter(function (c) { return c[0] === t.cat; })[0] || [])[1]].join(' ')) + ' ';
+    types[id] = t;
+  });
+  var refs = APP_REFS.map(function (r, i) {
+    var t = types[r[4]];
+    return { id: 'r' + i, brand: r[0], range: r[1], ref: r[2], name: r[3], type: r[4], specs: r[5], url: expandUrl(r[6]), key: refKey(r[2]),
+             own: ' ' + normTxt([r[0], r[1], r[2], r[3], r[5]].join(' ')) + ' ', hay: t ? t.hay : ' ' };
+  });
+  return { types: types, refs: refs };
+})();
+// prépare une fiche venue de la base partagée (recherche en direct enregistrée) pour la recherche
+function sharedEntry(id, d) {
+  var t = APPDB.types[d.type];
+  return { id: 's:' + id, shared: true, docId: id, verified: !!d.verified, brand: String(d.brand || ''), range: String(d.range || ''), ref: String(d.ref || ''), name: String(d.name || ''),
+           type: t ? d.type : '', specs: String(d.specs || ''), key: refKey(d.ref), live: d,
+           own: ' ' + normTxt([d.brand, d.range, d.ref, d.name, d.specs].join(' ')) + ' ', hay: t ? t.hay : ' ' };
+}
+// note d'un texte : chaque mot de la recherche doit se retrouver (mot entier, début de mot, ou dans le mot) ;
+// own = texte propre à la référence (compte plus), hay = texte du type d'appareil
+function scoreText(hay, toks, own) {
+  var s = 0, miss = 0;
+  toks.forEach(function (t) {
+    var w = function (h, a, b, c) { return h.indexOf(' ' + t + ' ') >= 0 ? a : (h.indexOf(' ' + t) >= 0 ? b : (t.length >= 4 && h.indexOf(t) >= 0 ? c : 0)); };
+    var v = own ? w(own, 60, 40, 15) : 0;
+    if (!v) v = w(hay, own ? 22 : 60, own ? 14 : 40, own ? 6 : 15);
+    if (v) s += v; else miss++;
+  });
+  // deux mots qui se suivent comme dans la recherche (« type a », « 3 fils ») : bonus
+  var txt = own || hay;
+  for (var i = 0; i + 1 < toks.length; i++) if (txt.indexOf(' ' + toks[i] + ' ' + toks[i + 1] + ' ') >= 0) s += 50;
+  return { s: s, miss: miss };
+}
+function searchApp(q, extra) {
+  var qn = normTxt(q), toks = qn.split(' ').filter(function (t) { return t.length > 0; }), qk = refKey(q);
+  if (!toks.length) return { refs: [], types: [], q: '' };
+  // morceaux de la recherche collés bout à bout : « wago 221-415 » contient « 221415 », « A9C 30811 » donne « a9c30811 »
+  var keys = [];
+  toks.forEach(function (t, i) {
+    var acc = '';
+    for (var j = i; j < toks.length && j < i + 4; j++) { acc += refKey(toks[j]); if (acc.length >= 3 && keys.indexOf(acc) < 0) keys.push(acc); }
+  });
+  var all = APPDB.refs.concat(extra || []), out = [];
+  all.forEach(function (r) {
+    var s = 0;
+    if (r.key && qk.length >= 3) {
+      if (r.key === qk) s = 1000;
+      else if (keys.indexOf(r.key) >= 0) s = 900;
+      else if (r.key.indexOf(qk) === 0) s = 650;
+      else if (keys.some(function (k) { return k.length >= 4 && r.key.indexOf(k) === 0; })) s = 600;
+      else if (qk.length >= 4 && r.key.indexOf(qk) >= 0) s = 380;
+    }
+    var m = scoreText(r.hay, toks, r.own);
+    if (!m.miss) s += 100 + m.s;
+    else if (s && m.miss < toks.length) s += m.s / 2;
+    if (s > 0) { if (r.shared && !r.verified) s -= 5; out.push({ r: r, s: s }); }
+  });
+  out.sort(function (a, b) { return b.s - a.s || (a.r.brand < b.r.brand ? -1 : 1); });
+  var tps = [];
+  Object.keys(APPDB.types).forEach(function (id) {
+    var t = APPDB.types[id], m = scoreText(t.hay, toks);
+    if (!m.miss) tps.push({ t: t, s: 100 + m.s + (normTxt(t.name) === qn ? 200 : 0) + (normTxt(t.name).indexOf(qn) === 0 ? 80 : 0) });
+  });
+  // une référence trouvée fait aussi remonter son type
+  out.slice(0, 6).forEach(function (o) { var t = APPDB.types[o.r.type]; if (t && !tps.some(function (x) { return x.t === t; })) tps.push({ t: t, s: 50 }); });
+  tps.sort(function (a, b) { return b.s - a.s; });
+  return { refs: out.slice(0, 60).map(function (o) { return o.r; }), types: tps.slice(0, 8).map(function (o) { return o.t; }), q: qn, best: out[0] ? out[0].s : 0 };
+}
+function refsOfType(id, extra) { return APPDB.refs.concat(extra || []).filter(function (r) { return r.type === id; }); }
+// un texte qui ressemble à une référence (chiffres, ou lettres et chiffres collés)
+function looksLikeRef(q) { var k = refKey(q); return k.length >= 4 && /\d/.test(k) && k.length <= 20; }
+
+/* ------------------------------------------------------------ dessin des bornes d'un appareil */
+var FICHE_COL = { R: '#d7262e', B: '#1f6fd9', GY: '#1f9e3c', K: '#1d1d22', M: '#8a5a2b', O: '#f28a1a', V: '#7b3fb5', G: '#8a929b' };
+function termSvg(t) {
+  var d = t.draw;
+  if (!d) return '';
+  if (d.body === 'wago') {
+    // borne à levier vue de dessus : 3 entrées, leviers orange
+    var s = '<svg class="term-svg" viewBox="0 0 260 120" width="286" height="132" role="img" aria-label="Borne de connexion"><rect x="40" y="30" width="180" height="60" rx="10" fill="#eef1f4" stroke="#4f5660" stroke-width="2"/>';
+    for (var i = 0; i < 3; i++) s += '<rect x="' + (58 + i * 56) + '" y="38" width="36" height="22" rx="4" fill="#f08a24" stroke="#9c540f" stroke-width="1.5"/><circle cx="' + (76 + i * 56) + '" cy="74" r="7" fill="#fff" stroke="#4f5660" stroke-width="1.5"/>' +
+      '<path d="M' + (76 + i * 56) + ',81 V114" stroke="' + FICHE_COL[['R', 'R', 'R'][i]] + '" stroke-width="5" stroke-linecap="round"/>';
+    return s + '<text x="130" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">1 fil par entrée, poussé jusqu’au fond</text></svg>';
+  }
+  var top = d.top || [], bot = d.bot || [], n = Math.max(top.length, bot.length, 1), pitch = 58;
+  var bw = d.body === 'mod' ? Math.max(76 * (d.w || 1), n * pitch + 10) : Math.max(170, n * pitch + 30), bh = d.body === 'mod' ? 150 : (d.body === 'wall' ? 128 : 96);
+  var W = bw + 60, H = bh + (top.length ? 64 : 22) + (bot.length ? 64 : 22), x0 = 30, y0 = top.length ? 64 : 22;
+  var out = ['<svg class="term-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + Math.round(W * 1.1) + '" height="' + Math.round(H * 1.1) + '" role="img" aria-label="Bornes de l’appareil">'];
+  if (d.body === 'mod') {
+    out.push('<rect x="' + x0 + '" y="' + y0 + '" width="' + bw + '" height="' + bh + '" rx="8" fill="#f5f6f8" stroke="#5f6670" stroke-width="2"/>');
+    out.push('<rect x="' + (x0 - 14) + '" y="' + (y0 + bh / 2 - 9) + '" width="' + (bw + 28) + '" height="18" rx="3" fill="#cfd5db" stroke="#7e868f"/>');
+    out.push('<rect x="' + (x0 + 4) + '" y="' + (y0 + bh / 2 - 11) + '" width="' + (bw - 8) + '" height="22" rx="4" fill="#f5f6f8"/>');
+  } else if (d.body === 'wall') {
+    out.push('<rect x="' + x0 + '" y="' + y0 + '" width="' + bw + '" height="' + bh + '" rx="16" fill="#ffffff" stroke="#5f6670" stroke-width="2"/>');
+    out.push('<rect x="' + (x0 + bw / 2 - 22) + '" y="' + (y0 + 12) + '" width="44" height="46" rx="8" fill="#eef1f4" stroke="#9aa3ad" stroke-width="1.5"/>');
+    out.push('<text x="' + (x0 + 12) + '" y="' + (y0 + 22) + '" font-size="10.5" fill="#5b6573">vue de dos</text>');
+  } else {
+    out.push('<rect x="' + x0 + '" y="' + y0 + '" width="' + bw + '" height="' + bh + '" rx="10" fill="#f5f6f8" stroke="#5f6670" stroke-width="2"/>');
+    out.push('<text x="' + (x0 + bw / 2) + '" y="' + (y0 + 34) + '" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">' + esc(t.name.length > 26 ? t.name.slice(0, 25) + '…' : t.name) + '</text>');
+  }
+  var row = function (list, isTop) {
+    var span = (list.length - 1) * pitch, cx0 = x0 + bw / 2 - span / 2;
+    list.forEach(function (tm, k) {
+      var cx = cx0 + k * pitch, cy = isTop ? y0 + 20 : y0 + bh - 20, col = FICHE_COL[tm[1]] || '#1d1d22';
+      var y1 = isTop ? cy - 10 : cy + 10, y2 = isTop ? 8 : H - 8;
+      if (tm[1] === 'GY') out.push('<path d="M' + cx + ',' + y1 + ' V' + y2 + '" stroke="#1f9e3c" stroke-width="6" stroke-linecap="round"/><path d="M' + cx + ',' + y1 + ' V' + y2 + '" stroke="#f5d40f" stroke-width="6" stroke-dasharray="7 7"/>');
+      else out.push('<path d="M' + cx + ',' + y1 + ' V' + y2 + '" stroke="' + col + '" stroke-width="6" stroke-linecap="round"/>');
+      out.push('<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="#d9dee3" stroke="#4f5660" stroke-width="1.6"/><path d="M' + (cx - 4) + ',' + (cy + 4) + ' l8,-8" stroke="#4f5660" stroke-width="1.8"/>');
+      var ly = isTop ? cy + 26 : cy - 17;
+      out.push('<text x="' + cx + '" y="' + ly + '" text-anchor="middle" font-size="' + (tm[0].length > 4 ? 10.5 : 13) + '" font-weight="800" fill="#14181f">' + esc(tm[0]) + '</text>');
+    });
+  };
+  row(top, true); row(bot, false);
+  out.push('</svg>');
+  return out.join('');
+}
+function termRows(t) {
+  var d = t.draw, rows = [];
+  if (d && d.body !== 'wago') (d.top || []).concat(d.bot || []).forEach(function (tm) { rows.push(tm); });
+  return rows;
+}
+function urlHost(u) { var m = /^https?:\/\/(?:www\.)?([^\/]+)/.exec(u || ''); return m ? m[1] : u; }
+function catName(c) { return (APP_CATS.filter(function (x) { return x[0] === c; })[0] || ['', ''])[1]; }
+
+/* ------------------------------------------------------------ fiche d'un appareil (HTML) */
+function ficheHtml(t, r, opts) {
+  opts = opts || {};
+  var h = '<article class="fiche">', L = r && r.live;
+  var title = r ? r.name : t.name, sub = r ? [r.brand, r.range].filter(Boolean).join(' · ') : catName(t.cat);
+  h += '<header class="f-head"><div class="f-txt"><p class="f-kicker">' + esc(t ? t.name : 'Appareil') + (t && t.mods ? ' · ' + esc(t.mods) : '') + '</p><h2>' + esc(title) + '</h2>' +
+       '<p class="f-sub">' + esc(sub) + (r && r.ref ? ' · réf. <b class="mono">' + esc(r.ref) + '</b>' : '') + '</p></div></header>';
+  if (r && !r.shared && !r.liveNew) h += '<p class="f-badge ok">Référence vérifiée sur ' + (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(urlHost(r.url)) + '</a>' : 'une page du fabricant') + (r.specs ? ' · ' + esc(r.specs) : '') + '</p>';
+  if (r && (r.shared || r.liveNew)) h += '<p class="f-badge ' + (r.verified ? 'ok' : 'warn') + '">' + (r.verified ? 'Base partagée · vérifiée sur la notice par le propriétaire' : 'Trouvé par la recherche en direct (Claude, sans accès à internet) · à vérifier sur la notice avant de câbler') + (L && L.certainty ? ' · certitude ' + esc(L.certainty) : '') + '</p>';
+  if (!t && !L) return h + '</article>';
+  // contenu : celui du type, complété (ou remplacé) par la réponse en direct
+  var how = L && L.how ? L.how : (t ? t.how : '');
+  if (how) h += '<section><h3>Comment ça marche</h3><p>' + esc(how) + '</p></section>';
+  var terms = L && L.terms && L.terms.length ? L.terms : (t ? t.terms : null);
+  if (terms || (t && t.draw)) {
+    h += '<section><h3>Les bornes</h3>';
+    if (t && t.draw && !(L && L.terms && L.terms.length)) {
+      h += '<div class="term-fig">' + termSvg(t) + '</div>';
+      var rows = termRows(t);
+      if (rows.length) h += '<table class="term-tab"><thead><tr><th>Borne</th><th>Va vers</th></tr></thead><tbody>' + rows.map(function (tm) {
+        return '<tr><td><span class="sw ' + tm[1] + '"></span><b>' + esc(tm[0]) + '</b></td><td>' + esc(tm[2]) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    if (terms) h += '<ul class="term-list">' + terms.map(function (x) { return '<li><b>' + esc(x[0]) + '</b> ' + esc(x[1]) + '</li>'; }).join('') + '</ul>';
+    var tn = L ? 'Repères donnés par Claude : vérifie-les sur la notice du fabricant.' : (t && t.termsNote ? t.termsNote
+      : (t && t.draw && t.draw.body === 'wago' ? 'Toutes les entrées d’une même borne sont reliées entre elles : n’y mets que des fils qui doivent être reliés (par exemple que des neutres).'
+      : 'La place des bornes change d’un modèle à l’autre : repère-toi aux marquages imprimés sur l’appareil.'));
+    h += '<p class="note">' + esc(tn) + '</p></section>';
+  }
+  var wir = L && L.wiring && L.wiring.length ? L.wiring : (t ? t.wiring : null);
+  if (wir && wir.length) h += '<section><h3>Câblage</h3><ol class="f-steps">' + wir.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol></section>';
+  var set = L && L.settings ? L.settings : (t ? t.settings : '');
+  if (set) h += '<section><h3>Réglages et utilisation</h3><p>' + esc(set) + '</p></section>';
+  var lim = L && L.limits ? L.limits : (t ? t.limits : '');
+  if (lim) h += '<section><h3>Caractéristiques et limites</h3><p>' + esc(lim) + '</p></section>';
+  if (t && t.norm) h += '<section class="f-norm"><h3>Ce que dit la norme</h3><p>' + esc(t.norm) + '</p></section>';
+  var errs = (t && t.errors ? t.errors : []).concat(L && L.caution ? [L.caution] : []);
+  if (errs.length) h += '<section><h3>Erreurs à éviter</h3><ul class="f-err">' + errs.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></section>';
+  if (t) {
+    var others = refsOfType(t.id, opts.extra).filter(function (x) { return !r || x.id !== r.id; });
+    if (others.length) h += '<section><h3>' + (r ? 'Autres références de ce type' : 'Références de ce type') + ' <small>(' + others.length + ')</small></h3><div class="f-refs">' + others.slice(0, 40).map(function (x) {
+      return '<button type="button" class="rchip" data-pref="' + esc(x.id) + '"><b>' + esc(x.ref) + '</b><span>' + esc(x.brand.replace(' Electric', '') + (x.range ? ' ' + x.range : '')) + '</span></button>';
+    }).join('') + '</div></section>';
+  }
+  var src = [];
+  if (r && r.url) src.push(r.url);
+  (t && t.src ? t.src : []).forEach(function (u) { u = expandUrl(u); if (src.indexOf(u) < 0) src.push(u); });
+  if (src.length) h += '<section><h3>Sources</h3><ul class="f-src">' + src.map(function (u) { return '<li><a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(urlHost(u)) + '</a></li>'; }).join('') + '</ul></section>';
+  h += '<p class="note">Fiche ElectroPlan pour l’apprentissage (base relevée en ' + APPDB_DATE + '). Vérifie toujours la notice du fabricant et câble hors tension.</p>';
+  return h + '</article>';
+}
+
+if (typeof module !== 'undefined') module.exports = { APPDB: APPDB, searchApp: searchApp, ficheHtml: ficheHtml, termSvg: termSvg, refKey: refKey, normTxt: normTxt };
+</script>

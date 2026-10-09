@@ -1,0 +1,31 @@
+const { chromium } = require('/opt/npm-tools/node_modules/playwright');
+const path = require('path');
+const fake = require('./fakeclaude');
+(async () => {
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const errs = [];
+  const pg = await b.newPage({ viewport: { width: 1360, height: 860 } });
+  pg.on('pageerror', e => errs.push(e.message));
+  await pg.addInitScript(fake);
+  await pg.goto('file://' + path.resolve(__dirname, '../dist/test_fonts.html')); await pg.waitForTimeout(900);
+  await pg.click('#tab-parts');
+  await pg.fill('#pq', 'E290-16-10'); await pg.waitForTimeout(400);
+  await pg.screenshot({ path: 'ui_live_before.png' });
+  await pg.click('#p-live'); await pg.waitForTimeout(150);
+  await pg.screenshot({ path: 'ui_live_busy.png' });
+  await pg.waitForTimeout(800);
+  await pg.screenshot({ path: 'ui_live_done.png' });
+  // la fiche enregistrée doit réapparaître dans la recherche (base partagée)
+  await pg.fill('#pq', 'E290'); await pg.waitForTimeout(500);
+  const shared = await pg.$$eval('.p-item .tag', els => els.map(e => e.textContent));
+  console.log('tags base partagée', shared);
+  await pg.click('[data-pref^="s:"]'); await pg.waitForTimeout(300);
+  await pg.click('[data-pver]'); await pg.waitForTimeout(300);
+  const tags2 = await pg.$$eval('.p-item .tag', els => els.map(e => e.textContent));
+  console.log('après vérification', tags2);
+  await pg.screenshot({ path: 'ui_live_shared.png' });
+  const prompt = await pg.evaluate(() => window.__lastPrompt);
+  console.log('prompt', prompt.length, 'caractères');
+  await b.close();
+  console.log(errs.length ? errs.join('\n') : 'aucune erreur JS');
+})();

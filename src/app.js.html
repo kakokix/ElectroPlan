@@ -1,0 +1,2113 @@
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var DRAFT_KEY = 'cabloplan:draft', SAVED_KEY = 'cabloplan:saved', STEPS_KEY = 'cabloplan:steps:';
+  var UI_KEY = 'cabloplan:ui', PANEL_KEY = 'cabloplan:panel', SIDEW_KEY = 'cabloplan:sidew', ZHINT_KEY = 'cabloplan:zhint', FOCUS_KEY = 'cabloplan:focushint';
+  var viewer = $('#viewer'), lists = $('#lists'), root = document.documentElement;
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  function ic(name) { return '<svg class="i" aria-hidden="true"><use href="#i-' + name + '"/></svg>'; }
+  function ttl(icon, text, tag) { tag = tag || 'h2'; return '<' + tag + ' class="card-title">' + ic(icon) + text + '</' + tag + '>'; }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* stockage indisponible */ } }
+
+  /* ---------------------------------------------------------------- projet */
+  function normBoxes(bs) {
+    var out = [];
+    (Array.isArray(bs) ? bs : []).forEach(function (b, i) {
+      if (!b || out.length >= 12) return;
+      var id = String(b.id || ('b' + (i + 1))).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 20) || ('b' + (i + 1));
+      if (out.some(function (x) { return x.id === id; })) return;
+      out.push({ id: id, name: String(b.name || ('Boîte ' + (i + 1))).slice(0, 40) });
+    });
+    if (!out.length) out.push({ id: 'b1', name: 'Boîte de dérivation' });
+    return out;
+  }
+  function normLengths(l, maquette) {
+    var d = defaultLengths(maquette);
+    if (!l || typeof l !== 'object') return d;
+    var num = function (v, def, max) { v = Number(v); return isFinite(v) && v >= 0 ? Math.min(v, max) : def; };
+    var tb = {};
+    if (l.tb && typeof l.tb === 'object') Object.keys(l.tb).slice(0, 12).forEach(function (k) { tb[String(k).slice(0, 20)] = num(l.tb[k], d.tbDef, 500); });
+    return { tb: tb, tbDef: num(l.tbDef, d.tbDef, 500), dev: num(l.dev, d.dev, 200), direct: num(l.direct, d.direct, 500), margin: num(l.margin, d.margin, 100) };
+  }
+  function normalize(p) {
+    if (!p || typeof p !== 'object') return null;
+    var o = p.options || {};
+    var options = { idMode: o.idMode === 'auto' ? 'auto' : 'single', idCal: Number(o.idCal) === 63 ? 63 : 40, idMin: Math.max(0, Math.min(6, parseInt(o.idMin, 10) || 0)),
+                    tabSide: SIDES.indexOf(o.tabSide) >= 0 ? o.tabSide : 'right', gaines: o.gaines === 'circuit' ? 'circuit' : 'groupe' };
+    var boxes = normBoxes(p.boxes);
+    var out = { name: String(p.name || 'Mon installation').slice(0, 80), options: options, boxes: boxes,
+                lengths: normLengths(p.lengths, options.idMode === 'single'), circuits: [] };
+    (p.circuits || []).slice(0, 60).forEach(function (c) {
+      if (!c || !CATALOG[c.type]) return;
+      var d = defaultCircuit(c.type);
+      if (c.uid) d.uid = String(c.uid).slice(0, 60);
+      d.label = String(c.label || '').slice(0, 40);
+      var box = c.box !== undefined ? String(c.box || '') : (c.viaBox === false ? '' : boxes[0].id);
+      if (box && !boxes.some(function (b) { return b.id === box; })) box = boxes[0].id;
+      d.box = box; d.viaBox = !!box;
+      CATALOG[c.type].params.forEach(function (pp) {
+        var v = c.params ? c.params[pp.k] : undefined;
+        if (v === undefined) return;
+        if (pp.options) { if (pp.options.some(function (x) { return x[0] === String(v); })) d.params[pp.k] = String(v); }
+        else if (pp.text) d.params[pp.k] = String(v).slice(0, 160);
+        else { var nv = parseInt(v, 10); d.params[pp.k] = Math.max(pp.min, Math.min(pp.max, isNaN(nv) ? pp.def : nv)); }
+      });
+      // côté par lequel chaque appareil entre dans la boîte (seulement ceux qu'on a choisis)
+      if (c.entries && typeof c.entries === 'object') {
+        var ent = {}, ne = 0;
+        Object.keys(c.entries).forEach(function (k) { if (ne < 40 && SIDES.indexOf(c.entries[k]) >= 0) { ent[String(k).slice(0, 120)] = c.entries[k]; ne++; } });
+        if (ne) d.entries = ent;
+      }
+      out.circuits.push(d);
+    });
+    return out;
+  }
+  var project = null;
+  try { project = normalize(JSON.parse(lsGet(DRAFT_KEY))); } catch (e) { project = null; }
+  if (!project) project = normalize(sampleProject());
+
+  var TABS = { box: 'boite', tab: 'tableau', uni: 'unifilaire', list: 'fils', labels: 'etiquettes', steps: 'pas-a-pas', quiz: 'entrainement', parts: 'appareils' };
+  var TAB_ORDER = ['box', 'tab', 'uni', 'list', 'labels', 'steps', 'quiz', 'parts'];
+  var SVG_TABS = { box: 1, tab: 1, uni: 1, labels: 1 };
+  /* mode : 'pc' ou 'mobile' (interface) ; view : vue affichée sur téléphone ('edit' = circuits, 'plans', 'list', 'steps', 'quiz') */
+  var ui = { tab: 'box', zoom: { box: 'fit', tab: 'fit', uni: 'fit', labels: 'fit' }, box: null,
+             mode: null, pref: 'auto', view: 'plans', plan: 'box', scroll: {}, vscroll: {}, openUid: null, stepOpen: {}, entOpen: {}, boxFocus: null, alertsOpen: undefined, lastWarn: 0 };
+  ui.pref = lsGet(UI_KEY) || 'auto';
+  if (ui.pref !== 'mobile' && ui.pref !== 'pc') ui.pref = 'auto';
+  var hsh = (location.hash || '').replace('#', ''), hashTab = false;
+  Object.keys(TABS).forEach(function (k) { if (TABS[k] === hsh) { ui.tab = k; hashTab = true; } });
+  function tabView(t) { return SVG_TABS[t] ? 'plans' : t; }
+  if (SVG_TABS[ui.tab]) ui.plan = ui.tab;
+  ui.view = hsh === 'circuits' ? 'edit' : (hashTab ? tabView(ui.tab) : (project.circuits.length ? 'plans' : 'edit'));
+  var model = null, byUid = {}, lastSvg = {};
+
+  function saveDraft() { lsSet(DRAFT_KEY, JSON.stringify(project)); }
+
+  /* ---------------------------------------------------------------- calcul du câblage (Web Workers)
+     Chaque boîte est calculée deux fois : une esquisse rapide, affichée tout de suite,
+     puis la version soignée (on essaie plusieurs dispositions), qui la remplace dès qu'elle est prête. */
+  var solCache = new Map(), pending = new Set(), waiters = [], queue = [], pool = [], noWorker = false, syncBusy = false;
+  var POOL = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+  var Box = BOXR();
+  function workerSrc() {
+    return 'var BOXR = ' + BOXR.toString() + ';\nvar O = BOXR();\n' +
+      'onmessage = function (e) { var d = e.data; var r = O.solve(d.inp, d.opts); postMessage({ key: d.key, q: d.q, res: r }); };';
+  }
+  // les versions soignées sont aussi gardées sur l'appareil (4 boîtes au plus) : à la réouverture, le plan s'affiche tout de suite
+  var SOL_KEY = 'cabloplan:boxsol', SOL_VER = 'b1';
+  function solId(key) { return SOL_VER + ':' + key.length + ':' + hashStr(key); }
+  function storeSol(key, q, res) {
+    pending.delete(key + q);
+    var cur = solCache.get(key);
+    if (q === 'f' || !cur) {
+      if (solCache.size > 60) solCache.clear();
+      solCache.set(key, { res: res, fin: q === 'f' });
+    }
+    if (q === 'f' && res && !res.stats.fails) {
+      try {
+        var saved = JSON.parse(lsGet(SOL_KEY) || '[]').filter(function (s) { return s && s.id !== solId(key); });
+        saved.unshift({ id: solId(key), res: res });
+        lsSet(SOL_KEY, JSON.stringify(saved.slice(0, 4)));
+      } catch (e) { /* stockage plein ou indisponible : tant pis */ }
+    }
+  }
+  function savedSol(key) {
+    try {
+      var id = solId(key), s = JSON.parse(lsGet(SOL_KEY) || '[]').filter(function (x) { return x && x.id === id; })[0];
+      return s && s.res && s.res.wires ? s.res : null;
+    } catch (e) { return null; }
+  }
+  var workerUrl = null;
+  function makeWorker() {
+    var w = new Worker(workerUrl);
+    w.job = null;
+    w.onmessage = function (e) { w.job = null; storeSol(e.data.key, e.data.q, e.data.res); pump(); onSolved(); };
+    w.onerror = function (ev) {
+      // calcul en arrière-plan indisponible ici : on bascule sur un calcul dans la page
+      if (ev && ev.preventDefault) ev.preventDefault();
+      var job = w.job; w.job = null;
+      pool = pool.filter(function (x) { return x !== w; });
+      try { w.terminate(); } catch (err) { /* déjà arrêté */ }
+      if (job) queue.unshift(job);
+      if (!pool.length) noWorker = true;
+      pump();
+    };
+    return w;
+  }
+  function setupPool() {
+    try {
+      workerUrl = URL.createObjectURL(new Blob([workerSrc()], { type: 'text/javascript' }));
+      for (var i = 0; i < POOL; i++) pool.push(makeWorker());
+    } catch (e) { pool = []; noWorker = true; }
+  }
+  // un calcul qui ne sert plus (boîte modifiée entre-temps) est arrêté pour laisser la place au nouveau
+  function dropStale(want) {
+    pool = pool.map(function (w) {
+      if (!w.job || want[w.job.key]) return w;
+      pending.delete(w.job.key + w.job.q);
+      try { w.terminate(); } catch (err) { /* déjà arrêté */ }
+      try { return makeWorker(); } catch (err) { return null; }
+    }).filter(Boolean);
+    if (!pool.length && !noWorker) noWorker = true;
+  }
+  setupPool();
+  function pump() {
+    if (noWorker) {
+      if (syncBusy || !queue.length) return;
+      syncBusy = true;
+      setTimeout(function () {
+        var job = queue.shift();
+        if (job) {
+          var o = Object.assign({}, job.opts);
+          if (!o.draft) o.budget = 1200;
+          storeSol(job.key, job.q, Box.solve(job.inp, o));
+        }
+        syncBusy = false;
+        onSolved();
+        pump();
+      }, 30);
+      return;
+    }
+    pool.forEach(function (w) {
+      if (w.job || !queue.length) return;
+      w.job = queue.shift();
+      w.postMessage(w.job);
+    });
+  }
+  var boxMemo = { rev: -1, all: null, byBox: {} };
+  function boxOf(boxId) {
+    if (boxMemo.rev !== modelRev) boxMemo = { rev: modelRev, all: null, byBox: {} };
+    if (!boxMemo.byBox[boxId]) {
+      var B = boxModel(model, boxId);
+      boxMemo.byBox[boxId] = { B: B, key: boxKey(B) };
+    }
+    return boxMemo.byBox[boxId];
+  }
+  function allBoxKeys() {
+    if (boxMemo.rev !== modelRev || !boxMemo.all) {
+      var want = {};
+      model.usedBoxes.forEach(function (b) { want[boxOf(b.id).key] = 1; });
+      boxMemo.all = want;
+    }
+    return boxMemo.all;
+  }
+  function requestBox(bm) {
+    // on oublie les calculs en attente qui ne servent plus (circuit modifié entre-temps)
+    var want = allBoxKeys(), key = bm.key, have = solCache.get(key);
+    queue = queue.filter(function (j) { if (want[j.key]) return true; pending.delete(j.key + j.q); return false; });
+    if (!noWorker) dropStale(want);
+    if (!have && !pending.has(key + 'd')) { pending.add(key + 'd'); queue.push({ key: key, q: 'd', inp: bm.B.inp, opts: { draft: true } }); }
+    if ((!have || !have.fin) && !pending.has(key + 'f')) { pending.add(key + 'f'); queue.push({ key: key, q: 'f', inp: bm.B.inp, opts: {} }); }
+    queue.sort(function (a, b) { return (a.q === 'd' ? 0 : 1) - (b.q === 'd' ? 0 : 1); });
+    pump();
+  }
+  function onSolved() {
+    if (ui.tab === 'box') renderBoxView();
+    var still = [];
+    waiters.forEach(function (w) { if (!w()) still.push(w); });
+    waiters = still;
+  }
+  function boxState(boxId) {
+    var bm = boxOf(boxId), have = solCache.get(bm.key);
+    if (!have || !have.fin) { var sv = savedSol(bm.key); if (sv) { have = { res: sv, fin: true }; solCache.set(bm.key, have); } }
+    if (!have || !have.fin) requestBox(bm);
+    return { have: have, total: 1, drafts: have ? 1 : 0, finals: have && have.fin ? 1 : 0 };
+  }
+  function boxSvgFrom(st, boxId) { return renderBox(model, boxId, st.have.res); }
+  function ensureBoxSvg(boxId) {
+    // pour les téléchargements : on attend la version soignée
+    return new Promise(function (resolve) {
+      var check = function () { var st = boxState(boxId); if (st.finals === st.total) { resolve(boxSvgFrom(st, boxId)); return true; } return false; };
+      if (!check()) waiters.push(check);
+    });
+  }
+  function curBox() {
+    var ub = model.usedBoxes;
+    if (!ub.length) return null;
+    if (!ub.some(function (b) { return b.id === ui.box; })) ui.box = ub[0].id;
+    return ui.box;
+  }
+
+  /* ---------------------------------------------------------------- rendu des vues */
+  var modelRev = 0, shownSig = '';
+  function showBusy(t) { $('#busytxt').textContent = t; $('#busy').hidden = false; }
+  function hideBusy() { $('#busy').hidden = true; }
+  function showSvg(kind, svg) {
+    lastSvg[kind] = svg;
+    if (ui.tab !== kind) return;
+    // chaque plan garde sa position de défilement quand on change d'onglet
+    var prev = viewer.dataset.kind, changed = prev !== kind;
+    if (changed && prev && SVG_TABS[prev]) ui.vscroll[prev] = [viewer.scrollLeft, viewer.scrollTop];
+    viewer.innerHTML = svg;
+    viewer.dataset.kind = kind;
+    viewer.classList.remove('dim');
+    applyZoom();
+    if (changed) { var s = ui.vscroll[kind]; viewer.scrollLeft = s ? s[0] : 0; viewer.scrollTop = s ? s[1] : 0; }
+  }
+  var EMPTY_ACTIONS = '<button type="button" class="primary" data-do="add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter un circuit</button><button type="button" data-do="gen"><svg class="i" aria-hidden="true"><use href="#i-house"/></svg>Logement selon la norme…</button>';
+  function emptyHtml(title, txt, actions) {
+    return '<div class="empty"><div><span class="empty-ic">' + ic('sparkles') + '</span><strong>' + esc(title) + '</strong><span>' + esc(txt) + '</span>' + (actions ? '<div class="row-actions">' + actions + '</div>' : '') + '</div></div>';
+  }
+  function showMessage(title, txt, actions) {
+    var prev = viewer.dataset.kind;
+    if (prev && SVG_TABS[prev]) ui.vscroll[prev] = [viewer.scrollLeft, viewer.scrollTop];
+    viewer.innerHTML = emptyHtml(title, txt, actions);
+    viewer.dataset.kind = '';
+    viewer.classList.remove('dim', 'can-pan');
+  }
+  function emptyMsg() { return ['Ta boîte est vide', 'Dis ce qu\'il y a dans ta boîte de dérivation : ajoute les circuits qui y passent, ou crée un logement selon la norme.']; }
+  function emptyState() { var m = emptyMsg(); showMessage(m[0], m[1], EMPTY_ACTIONS); hideBusy(); }
+  function emptyListHtml() { var m = emptyMsg(); return emptyHtml(m[0], m[1], EMPTY_ACTIONS); }
+  // les vues en liste (fils, pas à pas, entraînement) partagent un seul conteneur : chacune retrouve sa position de défilement
+  function setLists(h) {
+    var same = lists.dataset.tab === ui.tab, top = lists.scrollTop;
+    if (!same && lists.dataset.tab) ui.scroll[lists.dataset.tab] = top;
+    lists.innerHTML = h;
+    lists.dataset.tab = ui.tab;
+    lists.scrollTop = same ? top : (ui.scroll[ui.tab] || 0);
+  }
+  function renderBoxPick() {
+    var bp = $('#boxpick'), ub = model ? model.usedBoxes : [];
+    if (ui.tab !== 'box' || ub.length < 2) { bp.hidden = true; syncToolbar(); return; }
+    var cur = curBox();
+    bp.hidden = false;
+    bp.innerHTML = '<span class="lbl">Boîte :</span>' + ub.map(function (b) {
+      return '<button type="button" data-box="' + esc(b.id) + '" aria-pressed="' + (b.id === cur ? 'true' : 'false') + '">' + esc(b.name) + ' <small>(' + b.circuits.length + ')</small></button>';
+    }).join('');
+    syncToolbar();
+  }
+  // la barre au-dessus du plan ne s'affiche que si elle a quelque chose à montrer
+  function syncToolbar() {
+    var tb = $('#toolbar'), ex = $('#exportctl');
+    tb.hidden = $('#boxpick').hidden && (ex.parentNode !== tb || ex.hidden);
+  }
+  function renderBoxView() {
+    if (!model) return;
+    renderBoxPick();
+    if (!model.circuits.length) { shownSig = ''; return emptyState(); }
+    var bid = curBox();
+    if (!bid) {
+      hideBusy(); shownSig = '';
+      showMessage('Rien dans la boîte', 'Aucun circuit ne passe par une boîte de dérivation. Choisis une boîte dans la carte d\'un circuit.');
+      return;
+    }
+    var st = boxState(bid);
+    if (st.drafts < st.total) {
+      showBusy('Dessin de la boîte…');
+      if (viewer.dataset.kind === 'box') viewer.classList.add('dim');
+      else showMessage('Dessin en cours', 'Les bornes Wago sont placées et les fils tracés pour qu\'ils se croisent le moins possible.');
+      shownSig = '';
+      return;
+    }
+    var fin = st.finals === st.total, sig = modelRev + '|' + bid + (fin ? 'f' : 'd');
+    if (fin) hideBusy(); else showBusy('Amélioration du câblage…');
+    if (sig === shownSig && viewer.dataset.kind === 'box') return;
+    shownSig = sig;
+    showSvg('box', boxSvgFrom(st, bid));
+    applyFocus();
+    // astuce, une seule fois
+    if (fin && boxUnits(model, bid).length > 1 && !lsGet(FOCUS_KEY)) { lsSet(FOCUS_KEY, '1'); toast('Astuce : touche un circuit sur le plan pour le voir seul.'); }
+  }
+  function renderSvgTab(kind, fn) {
+    hideBusy();
+    if (!model.circuits.length) return emptyState();
+    var sig = modelRev + '|' + kind;
+    if (viewer.dataset.kind === kind && viewer.dataset.sig === sig) return applyZoom();
+    showSvg(kind, fn(model));
+    viewer.dataset.sig = sig;
+  }
+  function swatch(c) { return '<span class="sw ' + c + '" style="background:' + (c === 'GY' ? '' : WC[c]) + '"></span>'; }
+
+  /* -- fils, longueurs et matériel */
+  function lengthInputs() {
+    var Lg = project.lengths, h = '<div class="len-grid">';
+    var boxes = model.usedBoxes;
+    if (boxes.length) {
+      boxes.forEach(function (b) {
+        var v = Lg.tb[b.id] !== undefined ? Lg.tb[b.id] : Lg.tbDef;
+        h += '<label>Tableau → ' + esc(b.name) + ' (m)<input type="number" min="0" max="500" step="0.5" inputmode="decimal" data-len="tb" data-box="' + esc(b.id) + '" value="' + v + '"></label>';
+      });
+      h += '<label>Boîte → chaque appareil (m)<input type="number" min="0" max="200" step="0.5" inputmode="decimal" data-len="dev" value="' + Lg.dev + '"></label>';
+    }
+    if (model.circuits.some(function (c) { return !c.viaBox; })) h += '<label>Tableau → appareil direct (m)<input type="number" min="0" max="500" step="0.5" inputmode="decimal" data-len="direct" value="' + Lg.direct + '"></label>';
+    h += '<label>Marge pour les raccordements (%)<input type="number" min="0" max="100" step="5" inputmode="numeric" data-len="margin" value="' + Lg.margin + '"></label></div>';
+    return h;
+  }
+  function lengthResults() {
+    var R = computeLengths(model, project.lengths), h = '';
+    if (ui.mode === 'mobile') {
+      // téléphone : la section passe sous la couleur, pour tenir en trois colonnes
+      h += '<div class="tbl-wrap"><table class="tight"><thead><tr><th>Fil</th><th>Longueur</th><th>À acheter</th></tr></thead><tbody>';
+      R.rows.forEach(function (r) { h += '<tr><td class="wn">' + swatch(r.c) + esc(WN[r.c]) + '<br><small class="sec">' + r.sec + ' mm²</small></td><td class="num">' + r.m + ' m</td><td>' + esc(r.rolls) + '</td></tr>'; });
+    } else {
+      h += '<div class="tbl-wrap"><table><thead><tr><th>Fil</th><th>Section</th><th>Longueur</th><th>À acheter</th></tr></thead><tbody>';
+      R.rows.forEach(function (r) { h += '<tr><td class="wn">' + swatch(r.c) + esc(WN[r.c]) + '</td><td class="wn">' + r.sec + ' mm²</td><td class="num">' + r.m + ' m</td><td>' + esc(r.rolls) + '</td></tr>'; });
+    }
+    h += '</tbody></table></div>';
+    if (R.gaines.length) {
+      h += '<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Gaine</th><th>Longueur</th></tr></thead><tbody>';
+      R.gaines.forEach(function (g) { h += '<tr><td class="wn">ICTA Ø' + g.d + '</td><td class="num">' + g.m + ' m</td></tr>'; });
+      h += '</tbody></table></div>';
+    }
+    h += '<p class="note" style="margin-top:8px">Total ' + R.total + ' m de fil, marge comprise. Les ponts du tableau comptent 30 cm chacun.</p>';
+    return h;
+  }
+  function renderListView() {
+    hideBusy();
+    if (!model.circuits.length) { setLists(emptyListHtml()); return; }
+    var L = buildLists(model), h = '', multi = model.multiBox, mob = ui.mode === 'mobile';
+    h += '<section>' + ttl('ruler', 'Longueurs à prévoir') + '<p class="note">Mets tes distances : le métrage se met à jour tout seul.</p>' + lengthInputs() + '<div id="lenres">' + lengthResults() + '</div></section>';
+    h += '<section>' + ttl('cable', 'Fils qui partent du tableau') + '<p class="note">Un numéro par fil : repère-le aux deux bouts.</p>';
+    if (mob) {
+      // téléphone : une carte par fil, avec son repère comme sur le plan
+      h += '<ul class="wcards">' + L.tab.map(function (r) {
+        return '<li class="wcard"><span class="wnum" aria-label="Fil numéro ' + r.num + '">' + r.num + '</span><div class="wbody">' +
+          '<div class="w1">' + swatch(r.c) + '<b>' + esc(WN[r.c]) + '</b><span>' + secTxt(r.sec) + ' mm²</span><span class="wq">' + esc(r.q) + '</span></div>' +
+          '<div class="w2">' + esc(r.circuit + ' · ' + r.role) + '</div>' +
+          '<div class="w3"><span>' + esc(r.from) + '</span><span aria-hidden="true">→</span><span>' + esc(r.to) + '</span></div></div></li>';
+      }).join('') + '</ul></section>';
+    } else {
+      h += '<div class="tbl-wrap"><table><thead><tr><th>N°</th><th>Fil</th><th>Section</th><th>Circuit</th><th>Rôle</th><th>Côté tableau</th><th>Arrivée</th></tr></thead><tbody>';
+      L.tab.forEach(function (r) {
+        h += '<tr><td class="num">' + r.num + '</td><td class="wn">' + swatch(r.c) + esc(WN[r.c]) + '</td><td class="wn">' + secTxt(r.sec) + ' mm²</td><td>' + esc(r.q + ' · ' + r.circuit) + '</td><td>' + esc(r.role) + '</td><td>' + esc(r.from) + '</td><td>' + esc(r.to) + '</td></tr>';
+      });
+      h += '</tbody></table></div></section>';
+    }
+    if (L.dev.length) {
+      h += '<section>' + ttl('plug', 'Câbles entre la boîte et les appareils');
+      if (mob) {
+        h += '<ul class="wcards">' + L.dev.map(function (r) {
+          return '<li class="wcard"><span class="wref">' + esc(r.ref) + '</span><div class="wbody">' +
+            '<div class="w1"><b>' + esc(r.kind) + '</b><span class="wq">' + esc(r.q) + '</span></div>' +
+            '<div class="w2">' + r.cols.map(function (c, i) { return '<span>' + swatch(c) + esc(r.wires[i]) + '</span>'; }).join('') + '</div>' +
+            '<div class="w3"><span>' + secTxt(r.sec) + ' mm²</span><span>gaine ICTA Ø' + r.gaine + '</span>' + (multi ? '<span>' + esc(r.box) + '</span>' : '') + '</div></div></li>';
+        }).join('') + '</ul></section>';
+      } else {
+        h += '<div class="tbl-wrap"><table><thead><tr><th>Appareil</th><th>Circuit</th>' + (multi ? '<th>Boîte</th>' : '') + '<th>Fils</th><th>Section</th><th>Gaine</th></tr></thead><tbody>';
+        L.dev.forEach(function (r) {
+          h += '<tr><td><b>' + esc(r.ref) + '</b> · ' + esc(r.kind) + '</td><td class="num">' + esc(r.q) + '</td>' + (multi ? '<td>' + esc(r.box) + '</td>' : '') + '<td>' + esc(r.wires.join(' · ')) + '</td><td class="wn">' + secTxt(r.sec) + ' mm²</td><td class="wn">ICTA Ø' + r.gaine + '</td></tr>';
+        });
+        h += '</tbody></table></div></section>';
+      }
+    }
+    if (L.chain.length) {
+      h += '<section>' + ttl('plug', 'Liaisons entre prises (repiquage)') + '<p class="note">Ces circuits partent directement du tableau vers la première prise, puis d\'une prise à la suivante.</p><div class="tbl-wrap"><table><thead><tr><th>Liaison</th><th>Circuit</th><th>Fils</th><th>Section</th><th>Gaine</th></tr></thead><tbody>';
+      L.chain.forEach(function (r) {
+        h += '<tr><td><b>' + esc(r.from) + ' → ' + esc(r.to) + '</b></td><td class="num">' + esc(r.q) + '</td><td>' + esc(r.wires.join(' · ')) + '</td><td class="wn">' + secTxt(r.sec) + ' mm²</td><td class="wn">ICTA Ø' + r.gaine + '</td></tr>';
+      });
+      h += '</tbody></table></div></section>';
+    }
+    h += '<section>' + ttl('hash', 'Nombre de fils') + '<div class="totals">';
+    var totBox = function (title, obj) {
+      return Object.keys(obj).map(function (sec) {
+        var o = obj[sec], n = 0, li = '';
+        Object.keys(o).forEach(function (c) { n += o[c]; li += '<li>' + swatch(c) + esc(WN[c]) + '<em>' + o[c] + '</em></li>'; });
+        return '<div class="tot"><h3>' + title + ' · ' + sec + ' mm² · ' + n + ' fils</h3><ul>' + li + '</ul></div>';
+      }).join('');
+    };
+    h += totBox('Câblage', L.totals) + totBox('Ponts dans le tableau', L.pontTot);
+    h += '</div><p class="note">Câblage = fils du tableau + fils vers les appareils.</p></section>';
+    h += '<section>' + ttl('layers', 'Gaines depuis le tableau') + '<div class="tbl-wrap"><table><thead><tr><th>Circuit</th><th>Vers</th><th>Fils</th><th>Gaine conseillée</th></tr></thead><tbody>';
+    L.tabGaines.forEach(function (g) {
+      h += '<tr><td>' + esc(g.group ? g.circuit + ' (' + g.q + ')' : g.q + ' · ' + g.circuit) + '</td><td>' + esc(g.via ? g.box : g.to) + '</td><td class="wn">' + esc(g.wiresTxt) + '</td><td class="wn">ICTA Ø' + g.gaine + '</td></tr>';
+    });
+    h += '</tbody></table></div><p class="note">Règle du tiers : les fils ne doivent pas occuper plus d\'un tiers de la section intérieure de la gaine.</p></section>';
+    h += '<section>' + ttl('link', 'Ponts dans le tableau') + '<div class="tbl-wrap"><table><thead><tr><th>Liaison</th><th>Fil</th><th>Section</th></tr></thead><tbody>';
+    L.ponts.forEach(function (p) { h += '<tr><td>' + esc(p.txt) + '</td><td class="wn">' + swatch(p.c) + esc(WN[p.c]) + '</td><td class="wn">' + secTxt(p.sec) + ' mm²</td></tr>'; });
+    h += '</tbody></table></div></section>';
+    var mat = function (title, o) {
+      var ks = Object.keys(o);
+      if (!ks.length) return '';
+      return '<div class="tot"><h3>' + esc(title) + '</h3><ul>' + ks.map(function (k) { return '<li>' + esc(k) + '<em>× ' + o[k] + '</em></li>'; }).join('') + '</ul></div>';
+    };
+    var boxCards = multi ? Object.keys(L.boxMat).map(function (b) { return mat(b, L.boxMat[b]); }).join('') : mat('Boîte de dérivation', L.mat.boite);
+    h += '<section>' + ttl('wrench', 'Matériel') + '<div class="mat">' + mat('Tableau', L.mat.tableau) + boxCards + mat('Appareils', L.mat.appareils) + '</div></section>';
+    setLists(h);
+  }
+
+  /* -- pas à pas */
+  var steps = { key: null, done: {}, dbT: null };
+  function stepsKey() {
+    return hashStr(JSON.stringify([project.boxes, project.options, project.circuits.map(function (c) { return [c.type, c.params, c.box, c.label]; })]));
+  }
+  function loadSteps(key) {
+    steps.key = key; steps.done = {};
+    try { (JSON.parse(lsGet(STEPS_KEY + key) || '[]') || []).forEach(function (id) { steps.done[id] = 1; }); } catch (e) { steps.done = {}; }
+    if (store.mode === 'db') {
+      store.db.collection('data/users/' + store.uid).doc('steps-' + key).get().then(function (snap) {
+        if (steps.key !== key || !snap.exists) return;
+        var d = snap.data();
+        (d && Array.isArray(d.done) ? d.done : []).forEach(function (id) { steps.done[String(id)] = 1; });
+        if (ui.tab === 'steps') renderStepsView();
+      }).catch(function () {});
+    }
+  }
+  function saveSteps() {
+    var ids = Object.keys(steps.done), key = steps.key;
+    lsSet(STEPS_KEY + key, JSON.stringify(ids));
+    if (store.mode !== 'db') return;
+    clearTimeout(steps.dbT);
+    steps.dbT = setTimeout(function () {
+      store.db.collection('data/users/' + store.uid).doc('steps-' + key).set({ done: ids.slice(0, 2000), name: project.name, savedAt: new Date().toISOString() }).catch(function () {});
+    }, 900);
+  }
+  function renderStepsView() {
+    hideBusy();
+    if (!model.circuits.length) { setLists(emptyListHtml()); return; }
+    var key = stepsKey();
+    if (steps.key !== key) loadSteps(key);
+    var S = buildSteps(model), total = 0, done = 0;
+    S.forEach(function (s) { s.items.forEach(function (it) { total++; if (steps.done[it.id]) done++; }); });
+    // l'avancement reste collé en haut pendant qu'on fait défiler les étapes
+    var h = '<section class="progress"><div class="step-head">' + ttl('checks', 'Câblage pas à pas') + '<small id="stepcount">' + done + ' / ' + total + '</small></div>' +
+      '<div class="bar" role="progressbar" aria-label="Avancement" aria-valuemin="0" aria-valuemax="' + total + '" aria-valuenow="' + done + '"><i style="width:' + (total ? Math.round(done / total * 100) : 0) + '%"></i></div>' +
+      '<div class="row-actions"><button type="button" id="steps-next" class="primary"' + (done === total ? ' disabled' : '') + '>Aller à l\'étape suivante' + ic('down') + '</button><button type="button" id="steps-reset" class="ghost">Tout décocher</button></div></section>' +
+      '<p class="note">Coche chaque étape quand elle est faite. Ton avancement est gardé pour cette installation. Les parties terminées se replient.</p>';
+    S.forEach(function (s, si) {
+      var sd = s.items.filter(function (it) { return steps.done[it.id]; }).length, n = s.items.length;
+      var open = ui.stepOpen[s.title] !== undefined ? ui.stepOpen[s.title] : sd < n;
+      h += '<section class="stepsec' + (open ? '' : ' shut') + '"><h2 class="sec-h"><button type="button" class="sec-tg" data-sec="' + esc(s.title) + '" aria-expanded="' + open + '">' +
+        '<span class="sec-t">' + (si + 1) + '. ' + esc(s.title) + '</span><small class="sec-count">' + sd + ' / ' + n + '</small><span class="chev" aria-hidden="true"></span></button></h2>' +
+        (s.hint ? '<p class="note">' + esc(s.hint) + '</p>' : '') + '<ol class="steps">';
+      s.items.forEach(function (it) {
+        var on = !!steps.done[it.id];
+        h += '<li' + (on ? ' class="done"' : '') + '><label><input type="checkbox" data-step="' + it.id + '"' + (on ? ' checked' : '') + '>' +
+          '<span class="t">' + (it.cols.length ? '<span class="sws">' + it.cols.map(swatch).join('') + '</span>' : '') + esc(it.txt) + '</span></label></li>';
+      });
+      h += '</ol></section>';
+    });
+    setLists(h);
+  }
+  function goNextStep() {
+    var cb = lists.querySelector('[data-step]:not(:checked)');
+    if (!cb) return;
+    var sec = cb.closest('.stepsec'), tg = sec && sec.querySelector('.sec-tg');
+    if (sec && sec.classList.contains('shut')) { sec.classList.remove('shut'); tg.setAttribute('aria-expanded', 'true'); ui.stepOpen[tg.dataset.sec] = true; }
+    var li = cb.closest('li');
+    li.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    li.classList.remove('flash'); void li.offsetWidth; li.classList.add('flash');
+    try { cb.focus({ preventScroll: true }); } catch (e) { /* ancien navigateur */ }
+  }
+
+  /* -- entraînement */
+  var quiz = { mode: 'wire', uid: null, order: null, nets: null, picks: {}, checked: false, err: null, errPick: null, errChecked: false };
+  var sampleModel = null;
+  function quizPool() {
+    var cs = boxUnits(model);
+    if (cs.length) return { list: cs, sample: false };
+    if (!sampleModel) sampleModel = buildModel(sampleProject());
+    return { list: boxUnits(sampleModel), sample: true };
+  }
+  function shuffled(n) { var a = []; for (var i = 0; i < n; i++) a.push(i); for (var j = n - 1; j > 0; j--) { var k = Math.floor(Math.random() * (j + 1)); var t = a[j]; a[j] = a[k]; a[k] = t; } return a; }
+  function quizCircuit() {
+    var P = quizPool(), c = P.list.filter(function (x) { return x.uid === quiz.uid; })[0];
+    if (!c) { c = P.list[0]; quiz.uid = c.uid; quiz.order = null; quiz.err = null; }
+    return { c: c, P: P };
+  }
+  function newRound() { quiz.order = null; quiz.nets = null; quiz.picks = {}; quiz.checked = false; quiz.err = null; quiz.errPick = null; quiz.errChecked = false; }
+  function renderQuizView() {
+    hideBusy();
+    var Q = quizCircuit(), c = Q.c, h = '';
+    h += '<section>' + ttl('target', 'Entraînement') + '<p class="note">' + (Q.P.sample ? 'Ta boîte est vide : on s\'entraîne sur l\'exemple de maquette.' : 'Entraîne-toi sur les circuits de ta boîte.') + '</p>' +
+      '<div class="quiz-top"><div class="seg" id="qmode" style="min-width:min(100%,360px)"><button type="button" data-qmode="wire" aria-pressed="' + (quiz.mode === 'wire') + '">Câble la boîte</button><button type="button" data-qmode="error" aria-pressed="' + (quiz.mode === 'error') + '">Trouve l\'erreur</button></div>' +
+      '<label class="field" style="min-width:min(100%,260px)"><span>Circuit</span><select id="qcirc">' + Q.P.list.map(function (x) {
+        return '<option value="' + esc(x.uid) + '"' + (x.uid === c.uid ? ' selected' : '') + '>' + esc(x.q + ' · ' + x.title + (x.label ? ' (' + x.label + ')' : '')) + '</option>';
+      }).join('') + '</select></label></div></section>';
+    h += quiz.mode === 'wire' ? quizWireHtml(c) : quizErrorHtml(c);
+    setLists(h);
+  }
+  function quizWireHtml(c) {
+    var ws = quizWires(c);
+    if (!quiz.order || quiz.order.length !== ws.length) { quiz.order = shuffled(ws.length); quiz.nets = shuffled(c.nets.length); quiz.picks = {}; quiz.checked = false; }
+    var ok = 0, h = '<section><h2>Dans quelle borne va chaque fil ?</h2><p class="note">' + c.q + ' · ' + esc(c.title) + ' : ' + ws.length + ' fils arrivent dans la boîte. Choisis la borne Wago de chacun, puis vérifie.</p><div class="qlist">';
+    quiz.order.forEach(function (wi) {
+      var w = ws[wi], pick = quiz.picks[wi], cls = '';
+      if (quiz.checked) { cls = pick === w.net ? ' ok' : ' ko'; if (pick === w.net) ok++; }
+      h += '<div class="qrow' + cls + '"><div class="wl">' + swatch(w.c) + '<span>' + esc(w.label) + '</span></div>' +
+        '<select data-qwire="' + wi + '"' + (quiz.checked ? ' disabled' : '') + ' aria-label="Borne pour ' + esc(w.label) + '"><option value="">Choisis la borne…</option>' +
+        quiz.nets.map(function (ni) { var n = c.nets[ni]; return '<option value="' + n.id + '"' + (pick === n.id ? ' selected' : '') + '>' + esc(n.label) + '</option>'; }).join('') + '</select>';
+      if (quiz.checked && pick !== w.net) {
+        var ni = netIndex(c, w.net);
+        h += '<div class="fb">Bonne borne : <b>' + esc(c.nets[ni].label) + '</b>. ' + esc(netHelp(c, ni)) + '</div>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+    if (quiz.checked) h += '<p class="score">' + ok + ' / ' + ws.length + (ok === ws.length ? ' · bravo, tout est juste !' : '') + '</p>';
+    h += '<div class="row-actions">' + (quiz.checked ? '' : '<button type="button" class="primary" id="q-check">Vérifier</button>') + '<button type="button" id="q-new" class="ghost">Nouvelle partie</button></div></section>';
+    return h;
+  }
+  function quizErrorHtml(c) {
+    var errs = quizErrors(c);
+    if (!errs.length) return '<section><p class="note">Pas d\'erreur possible à proposer sur ce circuit. Choisis-en un autre.</p></section>';
+    if (!quiz.err || quiz.err.uid !== c.uid) { var e = errs[Math.floor(Math.random() * errs.length)]; quiz.err = Object.assign({ uid: c.uid }, e); quiz.errPick = null; quiz.errChecked = false; }
+    var E = quiz.err, ws = quizWires(c), wrongWire = ws[E.wire];
+    var h = '<section><h2>Une borne a un fil au mauvais endroit</h2><p class="note">' + c.q + ' · ' + esc(c.title) + ' : voici ce qu\'un élève a mis dans les bornes Wago. Trouve la borne où un fil n\'a rien à faire.</p><div class="qlist" role="radiogroup" aria-label="Bornes">';
+    c.nets.forEach(function (n) {
+      var parts = [];
+      ws.forEach(function (w, wi) {
+        var net = wi === E.wire ? E.to : w.net;
+        if (net === n.id) parts.push(swatch(w.c) + esc(w.src === 'tab' ? w.label.replace(/ \(arrive du tableau, Q\d+\)/, ' (tableau)') : WN[w.c] + ' de ' + w.dv.ref));
+      });
+      var cls = '';
+      if (quiz.errChecked) cls = n.id === E.to ? ' ok' : (quiz.errPick === n.id ? ' ko' : '');
+      h += '<label class="borne' + cls + '"><input type="radio" name="qerr" value="' + n.id + '"' + (quiz.errPick === n.id ? ' checked' : '') + (quiz.errChecked ? ' disabled' : '') + '><div><b>Borne ' + esc(n.label) + '</b><span>' + (parts.length ? parts.join(' + ') : '<i>vide</i>') + '</span></div></label>';
+    });
+    h += '</div>';
+    if (quiz.errChecked) {
+      var good = quiz.errPick === E.to, fromL = c.nets[netIndex(c, E.from)].label, toL = c.nets[netIndex(c, E.to)].label;
+      h += '<div class="verdict ' + (good ? 'ok' : 'ko') + '"><b>' + (good ? 'Bien vu !' : 'Pas tout à fait.') + '</b> Le fil ' + esc(wrongWire.src === 'tab' ? wrongWire.label : WN[wrongWire.c] + ' de ' + wrongWire.dv.ref) +
+        ' est dans la borne <b>' + esc(toL) + '</b> au lieu de <b>' + esc(fromL) + '</b>.<br>Ce qui se passe : ' + esc(E.txt) + '</div>';
+    }
+    h += '<div class="row-actions">' + (quiz.errChecked ? '' : '<button type="button" class="primary" id="q-errcheck"' + (quiz.errPick ? '' : ' disabled') + '>Vérifier</button>') + '<button type="button" id="q-errnew" class="ghost">Une autre erreur</button></div></section>';
+    return h;
+  }
+
+
+  /* ---------------------------------------------------------------- appareils : recherche par référence ou par nom, fiches
+     Base intégrée (références vérifiées), base partagée (fiches trouvées en direct, enregistrées pour la classe)
+     et recherche en direct avec Claude pour une référence inconnue. */
+  var parts = { q: '', sel: null, shared: [], live: null, liveQ: '', liveBusy: false, liveErr: '', liveCtl: null, liveSave: '', mobFiche: false,
+                sample: null, owner: false, canEdit: false };
+  // page ouverte hors de Claude (site hébergé) : pas de recherche en direct ni de base partagée, téléchargements par le navigateur
+  var STANDALONE = !(window.claude && typeof window.claude.use === 'function');
+  var FRAMED = (function () { try { return window.top !== window.self; } catch (e) { return true; } })();
+  var partsT = null;
+  var TYPE_ICON = { tl: 'panel', mn: 'panel', km: 'panel', kmg: 'panel', hz: 'panel', cr: 'panel', del: 'panel', tv: 'panel', fpm: 'panel', son: 'panel', trs: 'panel', id: 'panel', dj: 'panel', dd: 'panel',
+                    agcp: 'panel', pf: 'panel', is: 'panel', pmod: 'panel', vy: 'panel', peigne: 'panel', linky: 'panel',
+                    vv: 'vv', dvv: 'sw2', perm: 'perm', bp: 'bp', voyant: 'swl', var: 'dim', det: 'det', vrs: 'vrsw', pc: 'socket', pcmd: 'socket', usb: 'socket', sdc: 'socket', thm: 'sw1', bps: 'bps', rj: 'socket', bip: 'sw1', vmcc: 'vmcsw',
+                    w221: 'wago', w2273: 'wago', w2773: 'wago', bdd: 'box', bat: 'box', dcl: 'lamp', icta: 'wago',
+                    vmc: 'fan', mvr: 'motor', rad: 'rad', ce: 'heater', plq: 'plate', irve: 'socket', daaf: 'bell', lum: 'lamp' };
+  function typeIco(id) { return '<span class="p-ic">' + catIcon(TYPE_ICON[id] || 'panel') + '</span>'; }
+  // les types d'appareils de l'installation en cours, pour les retrouver d'un clic
+  function projectTypes() {
+    var ids = [], add = function (id) { if (APPDB.types[id] && ids.indexOf(id) < 0) ids.push(id); };
+    (model ? model.circuits : []).forEach(function (c) {
+      var t = c.type;
+      if (t === 'sa') { add({ inter: 'vv', voyl: 'voyant', voyt: 'voyant', var2: 'var', var3: 'var', det2: 'det', det3: 'det' }[c.cde] || 'vv'); if (c.devices.some(function (d) { return d.cmdSock; })) add('pcmd'); }
+      if (t === 'da') add('dvv');
+      if (t === 'vv' || t === 'ec') add('vv');
+      if (t === 'pm') { add('perm'); add('vv'); }
+      if (t === 'tl') { add('tl'); add('bp'); }
+      if (t === 'mn') { add('mn'); add('bp'); }
+      if (t === 'ex') add(c.exCde === 'hor' ? 'hz' : 'cr');
+      if (t === 'hc') { add('km'); if (c.cmd === 'edf') add('linky'); add(c.devices[0] && c.devices[0].kind === 'heater' ? 'ce' : 'pc'); }
+      if (t === 'pc' || t === 'spe') add('pc');
+      if (t === 'vr') { add('vrs'); add('mvr'); }
+      if (t === 'vmc') { add('vmc'); if (c.vit === 2) add('vmcc'); }
+      if (t === 'pl') add('plq');
+      if (t === 'ch') { add('rad'); add('sdc'); if (c.fp) add('fpm'); }
+      if (t === 'so') { add('trs'); add('son'); add('bps'); }
+      if (c.devices.some(function (d) { return d.kind === 'lamp'; })) add('dcl');
+    });
+    if (model && model.circuits.length) { add('id'); add('dj'); }
+    if (model && model.usedBoxes.length) { add('w221'); add('bdd'); }
+    return ids;
+  }
+  function findRef(id) {
+    if (!id) return null;
+    if (id.indexOf('s:') === 0) return parts.shared.filter(function (r) { return r.id === id; })[0] || null;
+    return APPDB.refs.filter(function (r) { return r.id === id; })[0] || null;
+  }
+  function typeBtn(t) { return '<button type="button" class="p-item" data-ptype="' + t.id + '"' + (parts.sel === 't:' + t.id ? ' aria-current="true"' : '') + '>' + typeIco(t.id) + '<span class="p-t"><b>' + esc(t.name) + '</b><small>' + esc(catName(t.cat)) + ' · fiche générale</small></span></button>'; }
+  function refBtn(r) {
+    var t = APPDB.types[r.type];
+    return '<button type="button" class="p-item" data-pref="' + esc(r.id) + '"' + (parts.sel === r.id ? ' aria-current="true"' : '') + '>' + typeIco(r.type) +
+      '<span class="p-t"><b><span class="mono">' + esc(r.ref) + '</span> · ' + esc(r.brand.replace(' Electric', '')) + (r.range ? ' ' + esc(r.range) : '') + '</b><small>' + esc(r.name) + '</small>' +
+      (r.shared ? '<em class="tag ' + (r.verified ? 'ok' : 'warn') + '">' + (r.verified ? 'base partagée · vérifiée' : 'base partagée · à vérifier') + '</em>' : '') + '</span></button>';
+  }
+  function partsListHtml() {
+    var q = parts.q.trim(), h = '';
+    if (!q) {
+      var mine = projectTypes();
+      if (mine.length) h += '<section class="p-sec"><h3>' + ic('zap') + 'Dans ton installation</h3><div class="p-grid">' + mine.map(function (id) { return typeBtn(APPDB.types[id]); }).join('') + '</div></section>';
+      APP_CATS.forEach(function (c) {
+        var ts = Object.keys(APPDB.types).filter(function (id) { return APPDB.types[id].cat === c[0]; });
+        h += '<section class="p-sec"><h3>' + esc(c[1]) + ' <small>' + ts.length + '</small></h3><div class="p-grid">' + ts.map(function (id) { return typeBtn(APPDB.types[id]); }).join('') + '</div></section>';
+      });
+      h += '<p class="note p-about">' + ic('db') + APPDB.refs.length + ' références vérifiées (Legrand, Schneider Electric, Hager, Wago…) et ' + Object.keys(APPDB.types).length + ' fiches, relevées en ' + APPDB_DATE + '.' +
+           (parts.shared.length ? ' Plus ' + parts.shared.length + ' fiche' + (parts.shared.length > 1 ? 's' : '') + ' ajoutée' + (parts.shared.length > 1 ? 's' : '') + ' par la recherche en direct.' : '') + '</p>';
+      return h;
+    }
+    var R = searchApp(q, parts.shared);
+    if (R.refs.length) h += '<section class="p-sec"><h3>Références <small>' + R.refs.length + '</small></h3><div class="p-col">' + R.refs.map(refBtn).join('') + '</div></section>';
+    if (R.types.length) h += '<section class="p-sec"><h3>Fiches générales</h3><div class="p-col">' + R.types.map(typeBtn).join('') + '</div></section>';
+    if (!R.refs.length && !R.types.length) h += '<div class="p-none"><b>Rien dans la base pour « ' + esc(q) + ' ».</b><span>Vérifie la référence (sans espace ni point), ou cherche par nom : télérupteur, permutateur, prise USB…</span></div>';
+    if (R.best < 900 && (looksLikeRef(q) || (!R.refs.length && !R.types.length))) h += liveCardHtml(q);
+    return h;
+  }
+  function liveCardHtml(q) {
+    if (STANDALONE) {
+      return '<div class="p-live">' + ic('search') + '<div><b>Pas trouvé ? Trouve sa notice</b><span>Le fabricant y donne les bornes et le schéma de câblage de l’appareil.</span>' +
+        '<a class="p-web" href="https://www.google.com/search?q=' + encodeURIComponent(q + ' notice') + '" target="_blank" rel="noopener">' + ic('ext') + 'Chercher la notice de « ' + esc(q) + ' »</a></div></div>';
+    }
+    var can = !!parts.sample;
+    return '<div class="p-live">' + ic('bolt') + '<div><b>Pas trouvé ? Recherche en direct</b><span>' + (can
+      ? 'Claude cherche « ' + esc(q) + ' » dans ce qu’il connaît (sans accès à internet) et fait une fiche, à vérifier sur la notice. Ça utilise ton compte Claude.'
+      : 'La recherche en direct marche quand ElectroPlan est ouvert dans Claude, avec ton compte.') + '</span>' +
+      (can ? '<button type="button" class="primary sm" id="p-live"' + (parts.liveBusy ? ' disabled' : '') + '>' + ic('search') + 'Chercher en direct</button>' : '') + '</div></div>';
+  }
+  function partsFicheHtml() {
+    var back = ui.mode === 'mobile' ? '<button type="button" class="ghost sm p-back" id="p-back">' + ic('back') + 'Résultats</button>' : '';
+    if (parts.sel === 'live') return back + liveFicheHtml();
+    if (!parts.sel) return '<div class="p-empty">' + ic('search') + '<b>Cherche un appareil</b><span>Tape une vraie référence (412408, A9C30811, EPN510, S520204, 221-415…) ou un nom (télérupteur, va-et-vient, contacteur heures creuses…). La fiche montre ses bornes, son câblage et comment il marche.</span></div>';
+    var r = null, t = null;
+    if (parts.sel.indexOf('t:') === 0) t = APPDB.types[parts.sel.slice(2)];
+    else { r = findRef(parts.sel); t = r ? APPDB.types[r.type] : null; }
+    if (!t && !r) return back + '<div class="p-empty"><b>Fiche introuvable</b></div>';
+    return back + ficheHtml(t, r, { extra: parts.shared }) + ficheActions(t, r);
+  }
+  function ficheActions(t, r) {
+    var h = '';
+    if (t && t.add && CATALOG[t.add.type]) h += '<button type="button" class="primary" data-padd="' + t.id + '">' + ic('plus') + 'Ajouter à mon installation <small>(' + esc(CATALOG[t.add.type].name.toLowerCase()) + ')</small></button>';
+    if (r && r.shared && (parts.owner || parts.canEdit)) {
+      if (!r.verified) h += '<button type="button" data-pver="' + esc(r.docId) + '">' + ic('check') + 'J’ai vérifié sur la notice</button>';
+      h += '<button type="button" class="ghost danger" data-pdel="' + esc(r.docId) + '">' + ic('trash') + 'Retirer de la base</button>';
+    }
+    return h ? '<div class="row-actions f-actions">' + h + '</div>' : '';
+  }
+  function liveFicheHtml() {
+    if (parts.liveBusy) return '<div class="p-empty busy-live"><div class="spin" aria-hidden="true"></div><b>Claude cherche « ' + esc(parts.liveQ) + ' »…</b><span>Ça peut prendre jusqu’à une minute.</span><button type="button" class="ghost sm" id="p-live-stop">Arrêter</button></div>';
+    if (parts.liveErr) return '<div class="p-empty"><b>Recherche en direct</b><span>' + esc(parts.liveErr) + '</span></div>';
+    var d = parts.live;
+    if (!d) return '<div class="p-empty"><b>Recherche en direct</b></div>';
+    if (!d.found) return '<div class="p-empty"><b>Claude ne reconnaît pas « ' + esc(parts.liveQ) + ' » avec assez de certitude.</b><span>' + esc(d.how || 'Vérifie l’orthographe de la référence, ajoute la marque, ou cherche par le nom de l’appareil.') + '</span></div>';
+    var t = APPDB.types[d.type] || null;
+    var r = { id: 'live', liveNew: true, live: d, verified: false, brand: d.brand, range: d.range, ref: d.ref, name: d.name || (t ? t.name : parts.liveQ), type: d.type, specs: d.limits };
+    var note = parts.liveSave === 'ok' ? '<p class="note">' + ic('db') + 'Enregistrée dans la base partagée : la prochaine recherche la trouvera tout de suite.</p>'
+             : (parts.liveSave === 'denied' ? '<p class="note">Pas enregistrée dans la base partagée : seuls le propriétaire et les contributeurs de l’outil peuvent y ajouter des fiches.</p>' : '');
+    return ficheHtml(t, r, { extra: parts.shared }) + note + ficheActions(t, null);
+  }
+  function renderPartsView() {
+    hideBusy();
+    var h = '<div class="parts' + (parts.mobFiche ? ' show-fiche' : '') + '">' +
+      '<div class="p-search"><label class="p-in">' + ic('search') + '<input type="search" id="pq" value="' + esc(parts.q) + '" placeholder="Réf. ou nom : 412408, A9C30811, télérupteur…" aria-label="Chercher un appareil par sa référence ou son nom" autocomplete="off" enterkeyhint="search" spellcheck="false"></label></div>' +
+      '<div class="p-cols"><div class="p-list" id="p-list">' + partsListHtml() + '</div><div class="p-fiche" id="p-fiche">' + partsFicheHtml() + '</div></div></div>';
+    setLists(h);
+  }
+  function updatePartsList() { var el = $('#p-list'); if (el && ui.tab === 'parts') el.innerHTML = partsListHtml(); }
+  function updatePartsFiche(top) {
+    var el = $('#p-fiche'); if (!el || ui.tab !== 'parts') return;
+    el.innerHTML = partsFicheHtml();
+    var wrap = lists.querySelector('.parts');
+    if (wrap) wrap.classList.toggle('show-fiche', !!parts.mobFiche);
+    if (top) { if (ui.mode === 'mobile') lists.scrollTop = 0; else el.scrollTop = 0; }
+  }
+  function setPartsQuery(v, from) {
+    parts.q = String(v || '').slice(0, 80);
+    var hq = $('#hq'), pq = $('#pq');
+    if (hq && from !== 'hq' && hq.value !== parts.q) hq.value = parts.q;
+    if (pq && from !== 'pq' && pq.value !== parts.q) pq.value = parts.q;
+    clearTimeout(partsT);
+    partsT = setTimeout(function () {
+      if (parts.mobFiche && ui.mode === 'mobile') { parts.mobFiche = false; updatePartsFiche(); }
+      updatePartsList();
+      // une seule référence exacte : on ouvre sa fiche directement
+      var R = parts.q.trim() ? searchApp(parts.q, parts.shared) : null;
+      if (R && R.best >= 900 && R.refs[0] && ui.mode === 'pc' && parts.sel !== R.refs[0].id) { parts.sel = R.refs[0].id; updatePartsFiche(true); updatePartsList(); }
+    }, 140);
+  }
+  function selectPart(id) {
+    parts.sel = id; parts.mobFiche = ui.mode === 'mobile';
+    updatePartsList(); updatePartsFiche(true);
+    var f = $('#p-fiche'); if (f && ui.mode === 'pc') f.focus({ preventScroll: true });
+  }
+  function openParts(q) {
+    if (q !== undefined) parts.q = q;
+    if (ui.tab !== 'parts') setTab('parts'); else renderPartsView();
+    setTimeout(function () { var pq = $('#pq'); if (pq) { pq.focus(); pq.select(); } }, 30);
+  }
+  function addFromType(id) {
+    var t = APPDB.types[id]; if (!t || !t.add || !CATALOG[t.add.type]) return;
+    var c = defaultCircuit(t.add.type);
+    Object.assign(c.params, t.add.params || {});
+    if (!project.boxes.length && c.viaBox) { c.box = ''; c.viaBox = false; }
+    project.circuits.push(c);
+    ui.openUid = c.uid;
+    refreshAll();
+    toast(CATALOG[c.type].name + ' ajouté à ton installation.', 'Voir le plan', function () { setTab(c.viaBox ? 'box' : 'tab'); });
+  }
+  /* -- recherche en direct (capacité « sample » : Claude, sur le compte de la personne) */
+  var LIVE_ERR = { not_granted: 'Tu n’as pas autorisé ElectroPlan à utiliser Claude : la recherche en direct est coupée pour cette visite.',
+                   sampling_disabled: 'Claude n’est pas disponible pour ce compte.', capability_disabled: 'La recherche en direct n’est pas disponible ici.',
+                   rate_limited: 'Trop de recherches d’un coup, ou limite d’utilisation atteinte : réessaie plus tard.', session_expired: 'Reconnecte-toi à Claude, puis réessaie.',
+                   invalid_json: 'La réponse n’a pas pu être lue. Réessaie, ou ajoute la marque à la référence.', empty_completion: 'Pas de réponse. Réessaie avec la marque et la référence.',
+                   refused: 'Cette recherche n’a pas pu être faite. Reformule-la (marque + référence).',
+                   not_declared: 'La recherche en direct n’est pas disponible ici.', capability_removed: 'Ton appli Claude ne permet pas encore la recherche en direct : mets-la à jour.',
+                   prompt_too_large: 'Recherche trop longue : tape juste la marque et la référence.' };
+  function livePrompt(q) {
+    var types = Object.keys(APPDB.types).map(function (id) { return id + ' = ' + APPDB.types[id].name; }).join(' ; ');
+    return 'Tu aides un apprenti électricien en France (installation de logement, norme NF C 15-100). Il cherche cet appareil : « ' + q + ' ».\n' +
+      'Si c’est une vraie référence ou un vrai produit que tu connais (Legrand, Schneider Electric, Hager, Wago, Somfy, Delta Dore, ABB, Siemens, Eaton…), décris-le pour qu’il sache le câbler et le faire fonctionner.\n' +
+      'Règles : n’invente rien. Si tu ne connais pas cette référence exacte, mets "trouve": false. Si tu as un doute, mets "certitude": "faible". N’écris pas des repères de bornes que tu ne connais pas : écris alors « voir la notice ». ' +
+      'Rappelle dans "attention" ce qui est dangereux (travailler hors tension, protection à respecter).\n' +
+      'Pour "type", choisis l’identifiant le plus proche dans cette liste (ou "" si aucun) : ' + types + '.\n' +
+      'Écris en français simple, en tutoyant, avec des phrases courtes.\n' +
+      'Réponds uniquement avec un objet JSON de cette forme : {"trouve": true, "certitude": "haute", "marque": "", "gamme": "", "reference": "", "nom": "", "type": "", ' +
+      '"fonctionnement": "2 ou 3 phrases", "bornes": [{"repere": "A1", "role": "…"}], "cablage": ["étape 1", "étape 2"], "reglages": "", "caracteristiques": "", "attention": ""}';
+  }
+  function liveNormalize(o, q) {
+    o = o && typeof o === 'object' ? o : {};
+    var str = function (v, n) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n || 600); };
+    var cert = str(o.certitude, 20).toLowerCase();
+    var terms = Array.isArray(o.bornes) ? o.bornes.slice(0, 14).map(function (b) {
+      if (Array.isArray(b)) return [str(b[0], 24), str(b[1], 160)];
+      return b && typeof b === 'object' ? [str(b.repere || b.borne || b.id, 24), str(b.role || b.fonction, 160)] : null;
+    }).filter(function (b) { return b && (b[0] || b[1]); }) : [];
+    return { found: o.trouve === true || o.trouve === 'true', certainty: ['haute', 'moyenne', 'faible'].indexOf(cert) >= 0 ? cert : 'faible',
+             brand: str(o.marque, 60), range: str(o.gamme, 60), ref: str(o.reference, 40) || str(q, 40), name: str(o.nom, 140), type: APPDB.types[o.type] ? o.type : '',
+             how: str(o.fonctionnement, 700), terms: terms, wiring: Array.isArray(o.cablage) ? o.cablage.slice(0, 10).map(function (x) { return str(x, 300); }).filter(Boolean) : [],
+             settings: str(o.reglages, 500), limits: str(o.caracteristiques, 500), caution: str(o.attention, 400), q: str(q, 80) };
+  }
+  // réponse de Claude lue comme un objet JSON (même s'il y a une phrase autour)
+  function looseJson(t) {
+    t = String(t || '');
+    var a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a < 0 || b <= a) throw { code: 'invalid_json' };
+    try { return JSON.parse(t.slice(a, b + 1)); } catch (err) { throw { code: 'invalid_json' }; }
+  }
+  // sample.json, ou la réponse en texte quand l'appli Claude de la personne est plus ancienne
+  function askJson(prompt, signal) {
+    var s = parts.sample;
+    var viaText = function () { return s(prompt, { signal: signal }).then(function (r) { return looseJson(r && r.text); }); };
+    try {
+      if (typeof s.json !== 'function') return viaText();
+      return s.json(prompt, { signal: signal }).catch(function (e) {
+        if (e && e.code === 'capability_removed') return viaText();
+        if (e && e.code === 'invalid_json' && e.text) return looseJson(e.text);
+        throw e;
+      });
+    } catch (e) { return Promise.reject(e && e.code ? e : { code: 'upstream_error' }); }
+  }
+  function startLive() {
+    var q = parts.q.trim();
+    if (!q || parts.liveBusy) return;
+    if (!parts.sample) { toast('La recherche en direct marche quand ElectroPlan est ouvert dans Claude.'); return; }
+    var ctl = new AbortController();
+    parts.liveCtl = ctl; parts.liveBusy = true; parts.liveErr = ''; parts.liveQ = q; parts.live = null; parts.liveSave = ''; parts.sel = 'live'; parts.mobFiche = ui.mode === 'mobile';
+    updatePartsList(); updatePartsFiche(true);
+    askJson(livePrompt(q), ctl.signal).then(function (res) {
+      if (parts.liveCtl !== ctl) return;
+      parts.liveCtl = null; parts.liveBusy = false;
+      parts.live = liveNormalize(res, q);
+      if (parts.live.found) saveShared(parts.live);
+      updatePartsList(); updatePartsFiche();
+    }, function (e) {
+      if (parts.liveCtl !== ctl) return;
+      parts.liveCtl = null; parts.liveBusy = false;
+      var code = e && e.code;
+      if (code === 'cancelled') { parts.sel = null; parts.mobFiche = false; }
+      else parts.liveErr = LIVE_ERR[code] || 'La recherche n’a pas abouti (réseau ou service). Réessaie dans un moment.';
+      if (code === 'not_granted' || code === 'sampling_disabled' || code === 'capability_disabled' || code === 'capability_removed' || code === 'not_declared') parts.sample = null;
+      updatePartsList(); updatePartsFiche();
+    });
+  }
+  function liveDocId(d) { return ('ref-' + (refKey(d.brand) || 'x').slice(0, 30) + '-' + (refKey(d.ref) || refKey(d.q) || 'sans').slice(0, 60)); }
+  function saveShared(d) {
+    if (!store.db) return;
+    var body = { ref: d.ref, brand: d.brand, range: d.range, name: d.name, type: d.type, certainty: d.certainty, how: d.how,
+                 terms: d.terms.map(function (x) { return { id: x[0], role: x[1] }; }), wiring: d.wiring, settings: d.settings, limits: d.limits, caution: d.caution,
+                 q: d.q, verified: false, addedAt: new Date().toISOString(), by: store.uid || '' };
+    store.db.collection('catalog').doc(liveDocId(d)).set(body).then(function () { parts.liveSave = 'ok'; if (parts.sel === 'live') updatePartsFiche(); },
+      function () { parts.liveSave = 'denied'; if (parts.sel === 'live') updatePartsFiche(); });
+  }
+  function sharedFromDoc(id, d) {
+    var e = sharedEntry(id, d);
+    // fiche venue de la base partagée : même forme que la réponse en direct
+    e.live = { found: true, certainty: String(d.certainty || ''), brand: e.brand, range: e.range, ref: e.ref, name: e.name, type: e.type, how: String(d.how || ''),
+               terms: (Array.isArray(d.terms) ? d.terms : []).map(function (x) { return [String(x && x.id || ''), String(x && x.role || '')]; }),
+               wiring: (Array.isArray(d.wiring) ? d.wiring : []).map(String), settings: String(d.settings || ''), limits: String(d.limits || ''), caution: String(d.caution || '') };
+    return e;
+  }
+  function watchShared(db) {
+    try {
+      db.collection('catalog').limit(500).onSnapshot(function (snap) {
+        parts.shared = snap.docs.map(function (doc) { return sharedFromDoc(doc.id, doc.data() || {}); }).filter(function (e) { return e.ref || e.name; });
+        if (ui.tab === 'parts') { updatePartsList(); if (parts.sel && parts.sel.indexOf('s:') === 0) updatePartsFiche(); }
+      }, function () {});
+    } catch (e) { /* base partagée indisponible */ }
+  }
+
+  function renderActive() {
+    document.querySelectorAll('[data-tab]').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.tab === ui.tab ? 'true' : 'false'); });
+    var isSvg = !!SVG_TABS[ui.tab];
+    viewer.hidden = !isSvg; lists.hidden = isSvg;
+    $('#zoomctl').hidden = !isSvg;
+    $('.mplans').hidden = !isSvg;
+    $('#work').classList.toggle('is-svg', isSvg);
+    if (!isSvg) hideZhint(false);
+    if (ui.tab !== 'box') $('#boxpick').hidden = true;
+    $('#work').classList.toggle('is-parts', ui.tab === 'parts');
+    updateExportButtons();
+    if (ui.tab === 'box') renderBoxView();
+    else if (ui.tab === 'tab') renderSvgTab('tab', renderTableau);
+    else if (ui.tab === 'uni') renderSvgTab('uni', renderUnifilaire);
+    else if (ui.tab === 'labels') renderSvgTab('labels', renderLabels);
+    else if (ui.tab === 'list') renderListView();
+    else if (ui.tab === 'steps') renderStepsView();
+    else if (ui.tab === 'parts') renderPartsView();
+    else renderQuizView();
+    if (isSvg) maybeZhint();
+  }
+  /* contrôles de la norme : un bloc repliable, ouvert d'office quand il y a quelque chose à corriger */
+  function renderAlerts() {
+    var nw = model.warnings.length, ni = model.infos.length, el = $('#alerts');
+    if (nw > ui.lastWarn) ui.alertsOpen = undefined;
+    ui.lastWarn = nw;
+    $('#m-alerts-btn').hidden = !nw;
+    $('#m-alerts-n').textContent = nw;
+    $('#nav-dot').hidden = !nw;
+    if (!nw && !ni) { el.innerHTML = ''; return; }
+    var open = ui.alertsOpen !== undefined ? ui.alertsOpen : nw > 0;
+    var h = '<details class="alert-box"' + (open ? ' open' : '') + '><summary>' + ic('shield') +
+      (nw ? '<span class="pill warn">' + nw + ' à corriger</span>' : '') +
+      (ni ? '<span class="pill info">' + ni + ' info' + (ni > 1 ? 's' : '') + '</span>' : '') +
+      '<span class="sum-t">Contrôles NF C 15-100</span><span class="chev" aria-hidden="true"></span></summary><div class="alert-list">';
+    model.warnings.forEach(function (w) { h += '<div class="alert warn"><b>Attention</b><span>' + esc(w) + '</span></div>'; });
+    model.infos.forEach(function (w) { h += '<div class="alert info"><b>Info</b><span>' + esc(w) + '</span></div>'; });
+    el.innerHTML = h + '</div></details>';
+    el.querySelector('details').addEventListener('toggle', function (e) { ui.alertsOpen = e.target.open; });
+  }
+
+  /* ---------------------------------------------------------------- zoom
+     Boutons, molette avec Ctrl, glisser à la souris, double-clic ; sur téléphone, pincer et toucher deux fois. */
+  var ZMIN = 0.15, ZMAX = 3;
+  function svgDims(svg) { var m = /width="([\d.]+)" height="([\d.]+)"/.exec(svg); return { w: +m[1], h: +m[2] }; }
+  function fitWidth() {
+    var cs = getComputedStyle(viewer);
+    return viewer.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+  }
+  function effZoom() {
+    var el = viewer.querySelector('svg');
+    if (!el) return 1;
+    var w = +el.getAttribute('width');
+    var z = ui.zoom[ui.tab];
+    return z === 'fit' || z === undefined ? Math.max(0.1, fitWidth() / w) : z;
+  }
+  function curZoom() {
+    var el = viewer.querySelector('svg');
+    if (!el) return 1;
+    return (el.getBoundingClientRect().width / +el.getAttribute('width')) || effZoom();
+  }
+  function applyZoom() {
+    var el = viewer.querySelector('svg');
+    if (!el || !SVG_TABS[ui.tab] || !viewer.clientWidth) return;
+    var w = +el.getAttribute('width'), z = effZoom();
+    if (ui.tab === 'labels' && ui.zoom.labels === 'fit') z = Math.min(1, z);
+    el.style.width = Math.round(w * z) + 'px';
+    $('#zoomval').textContent = Math.round(z * 100) + ' %';
+    $('#zoomctl [data-zoom="fit"]').setAttribute('aria-pressed', ui.zoom[ui.tab] === 'fit' ? 'true' : 'false');
+    updatePanClass();
+  }
+  function updatePanClass() {
+    viewer.classList.toggle('can-pan', !!viewer.querySelector('svg') && (viewer.scrollWidth > viewer.clientWidth + 1 || viewer.scrollHeight > viewer.clientHeight + 1));
+  }
+  // zoome en gardant sous le doigt (ou la souris) le même point du plan
+  function zoomAt(z, cx, cy) {
+    var el = viewer.querySelector('svg');
+    if (!el || !SVG_TABS[ui.tab]) return;
+    var W0 = +el.getAttribute('width'), r = el.getBoundingClientRect(), z0 = r.width / W0 || effZoom();
+    var ux = (cx - r.left) / z0, uy = (cy - r.top) / z0;
+    ui.zoom[ui.tab] = Math.max(ZMIN, Math.min(ZMAX, z));
+    applyZoom();
+    var r2 = el.getBoundingClientRect(), z1 = r2.width / W0;
+    viewer.scrollLeft += r2.left + ux * z1 - cx;
+    viewer.scrollTop += r2.top + uy * z1 - cy;
+  }
+  function viewerCenter() { var r = viewer.getBoundingClientRect(); return [r.left + viewer.clientWidth / 2, r.top + viewer.clientHeight / 2]; }
+  function zoomBy(f) { var c = viewerCenter(); zoomAt(curZoom() * f, c[0], c[1]); hideZhint(true); }
+  function zoomFit() { ui.zoom[ui.tab] = 'fit'; applyZoom(); }
+  function toggleZoomAt(x, y) {
+    clearTimeout(focusT);
+    // ajusté → 100 % à cet endroit (ou 2× si l'ajustement montre déjà le plan en grand) ; sinon retour à l'ajustement
+    if (ui.zoom[ui.tab] === 'fit') { var z = curZoom(); zoomAt(z < 0.95 ? 1 : Math.min(ZMAX, z * 2), x, y); }
+    else zoomFit();
+    hideZhint(true);
+  }
+  $('#zoomctl').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-zoom]');
+    if (!b || !SVG_TABS[ui.tab]) return;
+    var a = b.dataset.zoom;
+    if (a === 'in') zoomBy(1.25);
+    else if (a === 'out') zoomBy(1 / 1.25);
+    else if (a === 'one') { var c = viewerCenter(); zoomAt(1, c[0], c[1]); }
+    else zoomFit();
+  });
+  var rT = null;
+  window.addEventListener('resize', function () { clearTimeout(rT); rT = setTimeout(applyZoom, 120); });
+  // la largeur de la planche change aussi quand on replie le volet, qu'on le redimensionne ou qu'on change de vue
+  if (window.ResizeObserver) {
+    var roF = 0;
+    new ResizeObserver(function () {
+      cancelAnimationFrame(roF);
+      roF = requestAnimationFrame(function () { if (ui.zoom[ui.tab] === 'fit') applyZoom(); else updatePanClass(); });
+    }).observe(viewer);
+  }
+
+  /* -- ordinateur : glisser pour déplacer, Ctrl + molette, double-clic */
+  var pan = null;
+  viewer.addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || !SVG_TABS[ui.tab] || !viewer.querySelector('svg')) return;
+    var r = viewer.getBoundingClientRect();
+    if (e.clientX >= r.left + viewer.clientLeft + viewer.clientWidth || e.clientY >= r.top + viewer.clientTop + viewer.clientHeight) return; // barres de défilement
+    if (!viewer.classList.contains('can-pan')) return;
+    pan = { x: e.clientX, y: e.clientY, sl: viewer.scrollLeft, st: viewer.scrollTop, id: e.pointerId, moved: false };
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!pan || e.pointerId !== pan.id) return;
+    var dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    if (!pan.moved && Math.abs(dx) + Math.abs(dy) > 3) { pan.moved = true; viewer.classList.add('panning'); }
+    if (pan.moved) { viewer.scrollLeft = pan.sl - dx; viewer.scrollTop = pan.st - dy; }
+  });
+  var panEndT = 0;
+  function endPan() { if (!pan) return; if (pan.moved) panEndT = Date.now(); pan = null; viewer.classList.remove('panning'); }
+  window.addEventListener('pointerup', endPan);
+  window.addEventListener('pointercancel', endPan);
+  var wz = null;
+  viewer.addEventListener('wheel', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || !SVG_TABS[ui.tab] || !viewer.querySelector('svg')) return;
+    e.preventDefault();
+    var dy = e.deltaMode === 1 ? e.deltaY * 16 : (e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY);
+    if (!wz) wz = { f: 1 };
+    wz.f *= Math.exp(-Math.max(-300, Math.min(300, dy)) * 0.0018); wz.x = e.clientX; wz.y = e.clientY;
+    if (!wz.raf) wz.raf = requestAnimationFrame(function () { var w = wz; wz = null; zoomAt(curZoom() * w.f, w.x, w.y); });
+  }, { passive: false });
+  viewer.addEventListener('dblclick', function (e) {
+    if (!SVG_TABS[ui.tab] || !e.target.closest('svg')) return;
+    e.preventDefault();
+    toggleZoomAt(e.clientX, e.clientY);
+  });
+
+  /* -- boîte : toucher un circuit (zone, fil, borne, appareil, carte) le met en avant ; toucher à nouveau ou ailleurs : tout revient */
+  var focusT = null;
+  function applyFocus() {
+    var el = viewer.querySelector('svg');
+    if (!el || viewer.dataset.kind !== 'box') return;
+    var f = ui.boxFocus;
+    if (f && f.rev === modelRev && f.box === ui.box) el.setAttribute('data-focus', f.u); else el.removeAttribute('data-focus');
+  }
+  viewer.addEventListener('click', function (e) {
+    if (ui.tab !== 'box' || viewer.dataset.kind !== 'box' || Date.now() - panEndT < 80) return;
+    var g = e.target.closest && e.target.closest('.u'), m = g && /\bu(\d+)\b/.exec(g.getAttribute('class') || '');
+    var u = m ? m[1] : '';
+    clearTimeout(focusT);
+    // on attend un peu : un double-clic (ou double toucher) sert au zoom
+    focusT = setTimeout(function () {
+      var cur = ui.boxFocus && ui.boxFocus.rev === modelRev && ui.boxFocus.box === ui.box ? ui.boxFocus.u : '';
+      ui.boxFocus = u && u !== cur ? { rev: modelRev, box: ui.box, u: u } : null;
+      applyFocus();
+    }, 260);
+  });
+
+  /* -- téléphone : pincer pour zoomer (aperçu fluide, puis redessin net au lâcher), toucher deux fois */
+  var pinch = null, tap = null, lastTap = null;
+  function tMid(ts) { return { x: (ts[0].clientX + ts[1].clientX) / 2, y: (ts[0].clientY + ts[1].clientY) / 2 }; }
+  function tDist(ts) { return Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY) || 1; }
+  function endPinch(commit) {
+    if (!pinch) return;
+    var p = pinch; pinch = null;
+    p.el.style.transform = ''; p.el.style.transformOrigin = ''; p.el.style.willChange = '';
+    if (!commit || (Math.abs(p.s - 1) < 0.02 && Math.abs(p.m.x - p.m0.x) + Math.abs(p.m.y - p.m0.y) < 2)) return;
+    var ux = p.lx / p.z0, uy = p.ly / p.z0, W0 = +p.el.getAttribute('width');
+    ui.zoom[ui.tab] = Math.max(ZMIN, Math.min(ZMAX, p.z0 * p.s));
+    applyZoom();
+    var r2 = p.el.getBoundingClientRect(), z1 = r2.width / W0;
+    viewer.scrollLeft += r2.left + ux * z1 - p.m.x;
+    viewer.scrollTop += r2.top + uy * z1 - p.m.y;
+    hideZhint(true);
+  }
+  viewer.addEventListener('touchstart', function (e) {
+    var el = viewer.querySelector('svg');
+    if (!el || !SVG_TABS[ui.tab]) return;
+    if (e.touches.length === 2) {
+      tap = null;
+      var r = el.getBoundingClientRect(), m = tMid(e.touches);
+      pinch = { el: el, d0: tDist(e.touches), m0: m, m: m, lx: m.x - r.left, ly: m.y - r.top, z0: r.width / +el.getAttribute('width'), s: 1 };
+      el.style.transformOrigin = pinch.lx + 'px ' + pinch.ly + 'px';
+      el.style.willChange = 'transform';
+    } else if (e.touches.length === 1) {
+      tap = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+    } else tap = null;
+  }, { passive: true });
+  viewer.addEventListener('touchmove', function (e) {
+    if (tap && e.touches.length === 1 && Math.abs(e.touches[0].clientX - tap.x) + Math.abs(e.touches[0].clientY - tap.y) > 12) tap = null;
+    if (!pinch || e.touches.length !== 2) return;
+    if (!e.cancelable) { endPinch(false); return; } // le navigateur fait déjà défiler : on le laisse faire
+    e.preventDefault();
+    var m = tMid(e.touches), z = Math.max(ZMIN, Math.min(ZMAX, pinch.z0 * tDist(e.touches) / pinch.d0));
+    pinch.s = z / pinch.z0; pinch.m = m;
+    pinch.el.style.transform = 'translate(' + (m.x - pinch.m0.x) + 'px,' + (m.y - pinch.m0.y) + 'px) scale(' + pinch.s + ')';
+  }, { passive: false });
+  viewer.addEventListener('touchend', function (e) {
+    if (pinch && e.touches.length < 2) { endPinch(true); lastTap = null; return; }
+    if (!tap || e.touches.length || e.changedTouches.length !== 1) return;
+    var t = e.changedTouches[0], now = Date.now();
+    if (now - tap.t > 350) { tap = null; return; }
+    if (lastTap && now - lastTap.t < 330 && Math.abs(t.clientX - lastTap.x) + Math.abs(t.clientY - lastTap.y) < 40) {
+      if (e.cancelable) e.preventDefault();
+      lastTap = null;
+      toggleZoomAt(t.clientX, t.clientY);
+    } else lastTap = { x: t.clientX, y: t.clientY, t: now };
+    tap = null;
+  });
+  viewer.addEventListener('touchcancel', function () { endPinch(false); tap = null; });
+
+  /* -- astuce de zoom, montrée une fois sur téléphone */
+  var zhT = null;
+  function maybeZhint() {
+    if (ui.mode !== 'mobile' || ui.view !== 'plans' || !model || !model.circuits.length || lsGet(ZHINT_KEY)) return;
+    var z = $('#zhint');
+    if (!z.hidden) return;
+    z.hidden = false;
+    clearTimeout(zhT); zhT = setTimeout(function () { z.hidden = true; }, 8000);
+  }
+  function hideZhint(done) {
+    var z = $('#zhint');
+    if (!z.hidden) { z.hidden = true; clearTimeout(zhT); }
+    if (done && ui.mode === 'mobile') lsSet(ZHINT_KEY, '1');
+  }
+  $('#zhint').addEventListener('click', function () { hideZhint(true); });
+
+  /* ---------------------------------------------------------------- panneau : circuits */
+  function paramHtml(c, pp) {
+    var id = 'p-' + c.uid + '-' + pp.k;
+    if (pp.options) {
+      return '<label for="' + id + '">' + esc(pp.label) + '<select id="' + id + '" data-k="' + pp.k + '">' +
+        pp.options.map(function (o) { return '<option value="' + o[0] + '"' + (String(c.params[pp.k]) === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>';
+    }
+    if (pp.text) {
+      return '<label for="' + id + '" class="wide">' + esc(pp.label) + '<input type="text" id="' + id + '" data-k="' + pp.k + '" data-text="1" value="' + esc(c.params[pp.k] || '') + '" placeholder="ex. Chambre 1, Chambre 2, Salle d\'eau" autocomplete="off"></label>';
+    }
+    var v = c.params[pp.k];
+    return '<div class="stepper"><span id="' + id + '">' + esc(pp.label) + '</span><div role="group" aria-labelledby="' + id + '">' +
+      '<button type="button" data-act="dec" data-k="' + pp.k + '" aria-label="Moins"' + (v <= pp.min ? ' disabled' : '') + '>−</button>' +
+      '<output>' + v + '</output>' +
+      '<button type="button" data-act="inc" data-k="' + pp.k + '" aria-label="Plus"' + (v >= pp.max ? ' disabled' : '') + '>+</button></div></div>';
+  }
+  function boxSelect(c) {
+    var id = 'bx-' + c.uid;
+    return '<label for="' + id + '">Boîte<select id="' + id + '" data-field="box">' + project.boxes.map(function (b) {
+      return '<option value="' + esc(b.id) + '"' + (c.box === b.id ? ' selected' : '') + '>' + esc(b.name) + '</option>';
+    }).join('') + '<option value=""' + (!c.box ? ' selected' : '') + '>Direct du tableau (sans boîte)</option></select></label>';
+  }
+  /* Sur ordinateur, chaque carte est ouverte. Sur téléphone, les cartes sont repliées (repère, nom, pièce) et une seule s'ouvre à la fois. */
+  function circuitCard(c, idx, n) {
+    var m = byUid[c.uid], d = CATALOG[c.type], mob = ui.mode === 'mobile', open = !mob || ui.openUid === c.uid;
+    var tech = m ? (m.id.ref + ' · ' + m.prot.cal + ' A · ' + secTxt(m.prot.sec) + ' mm²' + (m.type === 'hc' ? ' · commande ' + m.qc + ' 2 A' : '')) : '';
+    var sub = mob && c.label ? c.label + ' · ' + tech : tech, title = m ? m.title : d.name, bid = 'cb-' + esc(c.uid);
+    return '<li class="circuit' + (open ? ' open' : '') + '" data-uid="' + esc(c.uid) + '" style="--cc:' + (m ? m.color : 'var(--line-strong)') + '">' +
+      '<div class="c-head"><span class="qb">' + (m ? m.q : '—') + '</span><div class="c-title"><strong>' + esc(title) + '</strong><span>' + esc(sub) + '</span></div>' +
+      '<div class="c-tools pc-only"><button type="button" data-act="up" aria-label="Monter" title="Monter"' + (idx === 0 ? ' disabled' : '') + '>' + ic('up') + '</button>' +
+      '<button type="button" data-act="down" aria-label="Descendre" title="Descendre"' + (idx === n - 1 ? ' disabled' : '') + '>' + ic('down') + '</button>' +
+      '<button type="button" data-act="del" aria-label="Supprimer" title="Supprimer">' + ic('x') + '</button></div>' +
+      '<button type="button" class="ibtn c-toggle m-only" data-act="toggle" aria-expanded="' + open + '" aria-controls="' + bid + '" aria-label="' + (open ? 'Replier ' : 'Modifier ') + esc((m ? m.q + ' ' : '') + title) + '"><span class="chev" aria-hidden="true"></span></button></div>' +
+      '<div class="c-body" id="' + bid + '">' +
+      '<div class="c-grid"><label for="lbl-' + esc(c.uid) + '">Pièce<input type="text" id="lbl-' + esc(c.uid) + '" data-field="label" value="' + esc(c.label) + '" placeholder="ex. Salon" autocomplete="off"></label>' +
+      boxSelect(c) + d.params.map(function (pp) { return paramHtml(c, pp); }).join('') + '</div>' + entriesHtml(c, m) +
+      '<div class="c-mtools m-only"><button type="button" data-act="up"' + (idx === 0 ? ' disabled' : '') + '>' + ic('up') + 'Monter</button>' +
+      '<button type="button" data-act="down"' + (idx === n - 1 ? ' disabled' : '') + '>' + ic('down') + 'Descendre</button>' +
+      '<button type="button" data-act="del" class="danger">' + ic('trash') + 'Supprimer</button></div></div></li>';
+  }
+  // côté par lequel chaque câble entre dans la boîte (comme sur la vraie boîte) ; « Auto » : lampes en haut, le reste en bas
+  var SIDE_OPT = [['top', 'En haut'], ['bottom', 'En bas'], ['left', 'À gauche'], ['right', 'À droite']], SIDE_SHORT = { top: 'haut', bottom: 'bas', left: 'gauche', right: 'droite' };
+  function entriesHtml(c, m) {
+    if (!m || !m.viaBox) return '';
+    var devs = m.devices.map(function (dv) { return [dv, m]; });
+    if (m.cmdSub) m.cmdSub.devices.forEach(function (dv) { devs.push([dv, m.cmdSub]); });
+    if (!devs.length) return '';
+    var count = {};
+    devs.forEach(function (p) { count[p[0].side] = (count[p[0].side] || 0) + 1; });
+    var sum = SIDES.filter(function (s) { return count[s]; }).map(function (s) { return count[s] + ' ' + SIDE_TXT[s]; }).join(' · ');
+    return '<details class="entries" data-ent="' + esc(c.uid) + '"' + (ui.entOpen[c.uid] ? ' open' : '') + '><summary>' + ic('box') +
+      '<span class="ent-t">Entrées dans la boîte<small>' + esc(sum) + '</small></span><span class="chev" aria-hidden="true"></span></summary>' +
+      '<div class="ent-grid">' + devs.map(function (p) {
+        var dv = p[0], id = 'en-' + esc(c.uid) + '-' + hashStr(dv.ekey);
+        return '<label class="ent" for="' + id + '"><span class="ent-n"><b>' + esc(dv.ref) + '</b> ' + esc(devShort(dv, p[1])) + '</span>' +
+          '<select id="' + id + '" data-entry="' + esc(dv.ekey) + '"><option value=""' + (dv.sideSet ? '' : ' selected') + '>Auto (' + SIDE_SHORT[dv.sideAuto] + ')</option>' +
+          SIDE_OPT.map(function (o) { return '<option value="' + o[0] + '"' + (dv.sideSet && dv.side === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>';
+      }).join('') + '</div><p class="hint">Mets chaque câble du même côté que sur ta boîte : le plan suit.</p></details>';
+  }
+  function toggleCard(li) {
+    if (!li) return;
+    var uid = li.dataset.uid;
+    ui.openUid = ui.openUid === uid ? null : uid;
+    document.querySelectorAll('#circuits .circuit').forEach(function (x) {
+      var on = x.dataset.uid === ui.openUid, t = x.querySelector('.c-toggle');
+      x.classList.toggle('open', on);
+      if (t) {
+        t.setAttribute('aria-expanded', on ? 'true' : 'false');
+        t.setAttribute('aria-label', t.getAttribute('aria-label').replace(/^(Replier|Modifier) /, on ? 'Replier ' : 'Modifier '));
+      }
+    });
+    if (ui.openUid) li.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+  function renderBoxesManager() {
+    var counts = {};
+    project.circuits.forEach(function (c) { if (c.box) counts[c.box] = (counts[c.box] || 0) + 1; });
+    $('#boxes').innerHTML = project.boxes.map(function (b, i) {
+      return '<div class="bx"><span class="bxi" aria-hidden="true">' + (i + 1) + '</span><input type="text" data-bname="' + esc(b.id) + '" value="' + esc(b.name) + '" aria-label="Nom de la boîte ' + (i + 1) + '" autocomplete="off">' +
+        '<small>' + (counts[b.id] || 0) + ' circuit' + ((counts[b.id] || 0) > 1 ? 's' : '') + '</small>' +
+        (project.boxes.length > 1 ? '<button type="button" data-bdel="' + esc(b.id) + '" class="danger" aria-label="Supprimer ' + esc(b.name) + '">' + ic('x') + '</button>' : '') + '</div>';
+    }).join('') + '<div class="row-actions"><button type="button" id="btn-addbox"' + (project.boxes.length >= 12 ? ' disabled' : '') + '>' + ic('plus') + 'Ajouter une boîte</button></div>' +
+      '<div class="box-opts"><label for="opt-tabside">Le tableau arrive<select id="opt-tabside">' +
+      [['right', 'à droite de la boîte'], ['left', 'à gauche de la boîte'], ['top', 'en haut de la boîte'], ['bottom', 'en bas de la boîte']].map(function (o) {
+        return '<option value="' + o[0] + '"' + (project.options.tabSide === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join('') + '</select></label><label for="opt-gaines">Gaines du tableau<select id="opt-gaines">' +
+      [['groupe', 'Éclairage et prises à part'], ['circuit', 'Une gaine par circuit']].map(function (o) {
+        return '<option value="' + o[0] + '"' + (project.options.gaines === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join('') + '</select></label></div>';
+  }
+  // ordinateur : le champ du nom prend la largeur du nom, le crayon reste collé au texte
+  var fitCtx = null;
+  function fitName() {
+    var el = $('#pname');
+    if (ui.mode !== 'pc') { el.style.width = ''; return; }
+    var cs = getComputedStyle(el), txt = el.value || el.placeholder || '', w;
+    try {
+      fitCtx = fitCtx || document.createElement('canvas').getContext('2d');
+      fitCtx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+      w = fitCtx.measureText(txt).width + (parseFloat(cs.letterSpacing) || 0) * txt.length;
+    } catch (e) { w = txt.length * 9; }
+    // texte + marges du champ (10 à gauche, 34 à droite pour le crayon) + bordures
+    el.style.width = Math.ceil(Math.min(Math.max(w, 48) + 48, 480)) + 'px';
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitName(); });
+  function renderPanel() {
+    if (document.activeElement !== $('#pname')) $('#pname').value = project.name;
+    $('#mname').textContent = project.name;
+    fitName();
+    document.querySelectorAll('[data-idmode]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.idmode === project.options.idMode ? 'true' : 'false'); });
+    document.querySelectorAll('[data-idcal]').forEach(function (b) { b.setAttribute('aria-pressed', Number(b.dataset.idcal) === project.options.idCal ? 'true' : 'false'); });
+    $('#id-hint').textContent = model.ids.length ? model.ids.map(function (id) {
+      return id.ref + ' type ' + id.type + ' : ' + (id.circuits.length ? id.circuits.map(function (c) { return c.q + (c.qc ? '-' + c.qc : ''); }).join(', ') : 'aucun circuit');
+    }).join(' · ') : '';
+    var n = project.circuits.length;
+    $('#ccount').textContent = n;
+    $('#empty-circ').hidden = n > 0;
+    if (!document.activeElement || !document.activeElement.closest || !document.activeElement.closest('#boxes')) renderBoxesManager();
+    $('#circuits').innerHTML = project.circuits.map(function (c, i) { return circuitCard(c, i, n); }).join('');
+  }
+  function catIcon(kind) {
+    var parts = [], fake = { add: function (l, s) { parts.push(s); }, text: function () {} };
+    if (kind === 'wago') {
+      return '<svg viewBox="-20 -20 40 40" aria-hidden="true"><rect x="-16" y="-9" width="32" height="18" rx="4" fill="#eef1f4" stroke="#1d2430" stroke-width="2"/><rect x="-12" y="-6" width="7" height="7" rx="1.5" fill="#f08a24"/><rect x="-3.5" y="-6" width="7" height="7" rx="1.5" fill="#f08a24"/><rect x="5" y="-6" width="7" height="7" rx="1.5" fill="#f08a24"/></svg>';
+    }
+    if (kind === 'box') {
+      return '<svg viewBox="-20 -20 40 40" aria-hidden="true"><rect x="-15" y="-15" width="30" height="30" rx="5" fill="#fff" stroke="#1d2430" stroke-width="2"/><circle cx="-9" cy="-9" r="2" fill="#1d2430"/><circle cx="9" cy="9" r="2" fill="#1d2430"/><rect x="-7" y="-3" width="14" height="6" rx="1.5" fill="#f08a24"/></svg>';
+    }
+    if (kind === 'clock') {
+      return '<svg viewBox="-20 -20 40 40" aria-hidden="true"><circle r="14" fill="#fff" stroke="#1d2430" stroke-width="2"/><path d="M0,-8 V0 L6,4" fill="none" stroke="#1d2430" stroke-width="2" stroke-linecap="round"/></svg>';
+    }
+    icon(fake, kind === 'vr' ? 'vrsw' : kind, 0, 0);
+    return '<svg viewBox="-20 -20 40 40" aria-hidden="true">' + parts.join('') + '</svg>';
+  }
+  function renderCatalog() {
+    var groups = {};
+    Object.keys(CATALOG).forEach(function (k) { var d = CATALOG[k]; (groups[d.group] = groups[d.group] || []).push(k); });
+    $('#catalog').innerHTML = Object.keys(groups).map(function (g) {
+      return '<div class="cat-group"><h3>' + esc(g) + '</h3><div class="cat-items">' + groups[g].map(function (k) {
+        return '<button type="button" data-add="' + k + '"><span class="ico">' + catIcon(CATALOG[k].icon) + '</span>' + esc(CATALOG[k].name) + '</button>';
+      }).join('') + '</div></div>';
+    }).join('');
+  }
+
+  function rebuild() {
+    modelRev++;
+    model = buildModel(project);
+    byUid = {};
+    model.circuits.forEach(function (c) { byUid[c.uid] = c; });
+  }
+  function refreshAll() { rebuild(); renderPanel(); renderAlerts(); renderActive(); saveDraft(); }
+  var outT = null;
+  function refreshOutputsSoon() {
+    clearTimeout(outT);
+    outT = setTimeout(function () { rebuild(); renderAlerts(); renderActive(); saveDraft(); }, 450);
+  }
+
+  /* ---------------------------------------------------------------- panneau : logement selon la norme */
+  var gen = defaultDwellingForm('T3');
+  var GEN_STEP = [['chambres', 'Chambres', 0, 6], ['sde', 'Salles d\'eau', 1, 3], ['wc', 'WC séparés', 0, 3], ['vr', 'Volets roulants', 0, 9]];
+  var GEN_ROOMS = [['entree', 'Entrée'], ['couloir', 'Couloir (2 commandes)'], ['cellier', 'Cellier / buanderie'], ['garage', 'Garage'], ['cuisine4', 'Cuisine de plus de 4 m²'], ['ext', 'Accès extérieur (maison)']];
+  var GEN_APP = [['ll', 'Lave-linge'], ['sl', 'Sèche-linge'], ['lv', 'Lave-vaisselle'], ['four', 'Four'], ['cong', 'Congélateur'], ['plaque', 'Plaque de cuisson'], ['ce', 'Chauffe-eau (heures creuses)'], ['vmc', 'VMC'], ['chauf', 'Radiateurs électriques (fil pilote)']];
+  function genSummary() {
+    var r = generateDwelling(gen), cs = r.project.circuits, cnt = function (t) { return cs.filter(function (c) { return c.type === t; }).length; };
+    var m = buildModel(r.project);
+    var s = cs.length + ' circuits : ' + (cnt('ec') + cnt('vv')) + ' d\'éclairage, ' + cnt('pc') + ' de prises (' + cs.filter(function (c) { return c.type === 'pc'; }).reduce(function (a, c) { return a + c.params.sockets; }, 0) + ' prises), ' +
+      cnt('spe') + ' spécialisé' + (cnt('spe') > 1 ? 's' : '') + (cnt('pl') ? ', plaque' : '') + (cnt('hc') ? ', chauffe-eau' : '') + (cnt('vmc') ? ', VMC' : '') + (cnt('vr') ? ', volets' : '') +
+      ' · ' + m.ids.length + ' interrupteurs différentiels · ' + r.project.boxes.length + ' boîte' + (r.project.boxes.length > 1 ? 's' : '') + '.';
+    return { txt: s, notes: r.notes };
+  }
+  function renderGen() {
+    var h = '<div class="opts" id="gen-type" role="group" aria-label="Type de logement">' + ['T1', 'T2', 'T3', 'T4', 'T5'].map(function (t) {
+      return '<button type="button" data-gtype="' + t + '" aria-pressed="' + (gen.type === t) + '">' + t + '</button>';
+    }).join('') + '</div><div class="gen-grid">';
+    GEN_STEP.forEach(function (g) {
+      var v = gen[g[0]];
+      h += '<div class="stepper"><span id="g-' + g[0] + '">' + g[1] + '</span><div role="group" aria-labelledby="g-' + g[0] + '">' +
+        '<button type="button" data-gact="dec" data-gk="' + g[0] + '" aria-label="Moins"' + (v <= g[2] ? ' disabled' : '') + '>−</button><output>' + v + '</output>' +
+        '<button type="button" data-gact="inc" data-gk="' + g[0] + '" aria-label="Plus"' + (v >= g[3] ? ' disabled' : '') + '>+</button></div></div>';
+    });
+    h += '<label>Séjour (m²)<input type="number" min="8" max="120" step="1" inputmode="numeric" data-gnum="sejour" value="' + gen.sejour + '"></label></div>';
+    var chk = function (title, list) {
+      return '<fieldset class="chk-group"><legend>' + title + '</legend>' + list.map(function (x) {
+        return '<label><input type="checkbox" data-gchk="' + x[0] + '"' + (gen[x[0]] ? ' checked' : '') + '>' + esc(x[1]) + '</label>';
+      }).join('') + '</fieldset>';
+    };
+    h += chk('Pièces', GEN_ROOMS) + chk('Appareils', GEN_APP);
+    h += '<p class="gen-sum" id="gen-sum"></p><ul class="gen-notes" id="gen-notes" hidden></ul>';
+    h += '<p class="hint">Règles appliquées (NF C 15-100, édition 2024, obligatoire depuis le 1er septembre 2025) : séjour 1 prise par tranche de 4 m², 5 au moins (au-delà de 28 m² : 7 au moins, à définir avec le client) + 2 prises multimédia ; 3 par chambre ; 6 en cuisine sur un circuit dédié (3 si 4 m² ou moins) ; 1 dans les autres pièces sauf WC ; prise du tableau de communication sur son circuit ; 1 point lumineux par pièce (et au-dessus de l\'accès extérieur d\'une maison), 8 au plus par circuit, au moins 2 circuits d\'éclairage (1 en T1) ; prises : 8 au plus par circuit pour garder de la marge (la norme en admet 12 en 2,5 mm²) ; au moins 2 interrupteurs différentiels dont 1 de type A, 8 circuits au plus chacun, lave-linge et plaque sur le type A ; calibre 63 A si la somme des calibres le demande.</p>';
+    h += '<div class="row-actions gen-actions"><button type="button" class="primary" id="gen-go">Créer ce logement</button><button type="button" class="ghost" id="gen-close">Fermer</button></div>';
+    $('#gen-body').innerHTML = h;
+    updateGenSum();
+  }
+  function updateGenSum() {
+    var S = genSummary(), ul = $('#gen-notes');
+    $('#gen-sum').textContent = S.txt;
+    ul.innerHTML = S.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
+    ul.hidden = !S.notes.length;
+  }
+  $('#gen').addEventListener('click', function (e) {
+    var t = e.target.closest('[data-gtype]');
+    if (t) {
+      var keep = {};
+      GEN_ROOMS.concat(GEN_APP).forEach(function (x) { keep[x[0]] = gen[x[0]]; });
+      gen = Object.assign(defaultDwellingForm(t.dataset.gtype), keep, { couloir: t.dataset.gtype === 'T1' ? false : keep.couloir, vr: gen.vr });
+      renderGen(); return;
+    }
+    var s = e.target.closest('[data-gact]');
+    if (s) {
+      var g = GEN_STEP.filter(function (x) { return x[0] === s.dataset.gk; })[0];
+      gen[g[0]] = Math.max(g[2], Math.min(g[3], gen[g[0]] + (s.dataset.gact === 'inc' ? 1 : -1)));
+      renderGen();
+      var again = document.querySelector('[data-gact="' + s.dataset.gact + '"][data-gk="' + g[0] + '"]'); if (again && !again.disabled) again.focus();
+      return;
+    }
+    if (e.target.closest('#gen-close')) { closeOv(); return; }
+    if (e.target.closest('#gen-go')) {
+      var before = JSON.stringify(project), r = generateDwelling(gen);
+      project = normalize(r.project);
+      ui.box = null; ui.openUid = null; quiz.uid = null; newRound();
+      refreshAll();
+      $('#panel').scrollTop = 0;
+      closeOv(false);
+      setTab('box');
+      toast('Logement ' + gen.type + ' créé : ' + project.circuits.length + ' circuits.', 'Annuler', function () { project = normalize(JSON.parse(before)); refreshAll(); });
+    }
+  });
+  $('#gen').addEventListener('change', function (e) {
+    var c = e.target.closest('[data-gchk]');
+    if (c) { gen[c.dataset.gchk] = c.checked; updateGenSum(); return; }
+    var n = e.target.closest('[data-gnum]');
+    if (n) { gen.sejour = Math.max(8, Math.min(120, parseInt(n.value, 10) || 20)); n.value = gen.sejour; updateGenSum(); }
+  });
+
+  /* ---------------------------------------------------------------- événements du panneau */
+  function findCircuit(el) {
+    var li = el.closest('.circuit');
+    if (!li) return null;
+    var uid = li.dataset.uid;
+    for (var i = 0; i < project.circuits.length; i++) if (project.circuits[i].uid === uid) return { c: project.circuits[i], i: i };
+    return null;
+  }
+  var lastDeleted = null;
+  $('#circuits').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]');
+    if (!b) {
+      // téléphone : toucher l'en-tête d'une carte l'ouvre ou la referme
+      var head = e.target.closest('.c-head');
+      if (head && ui.mode === 'mobile') toggleCard(head.closest('.circuit'));
+      return;
+    }
+    if (b.dataset.act === 'toggle') { toggleCard(b.closest('.circuit')); return; }
+    var f = findCircuit(b);
+    if (!f) return;
+    var a = b.dataset.act, cs = project.circuits;
+    if (a === 'up' && f.i > 0) { cs.splice(f.i - 1, 0, cs.splice(f.i, 1)[0]); }
+    else if (a === 'down' && f.i < cs.length - 1) { cs.splice(f.i + 1, 0, cs.splice(f.i, 1)[0]); }
+    else if (a === 'del') {
+      lastDeleted = { c: cs.splice(f.i, 1)[0], i: f.i };
+      if (ui.openUid === f.c.uid) ui.openUid = null;
+      toast('Circuit supprimé.', 'Annuler', function () { if (lastDeleted) { project.circuits.splice(lastDeleted.i, 0, lastDeleted.c); lastDeleted = null; refreshAll(); } });
+    } else if (a === 'inc' || a === 'dec') {
+      var pp = CATALOG[f.c.type].params.filter(function (x) { return x.k === b.dataset.k; })[0];
+      f.c.params[pp.k] = Math.max(pp.min, Math.min(pp.max, f.c.params[pp.k] + (a === 'inc' ? 1 : -1)));
+    }
+    refreshAll();
+    var scope = '.circuit[data-uid="' + f.c.uid + '"] ' + (ui.mode === 'mobile' ? '.c-mtools ' : '.c-tools ');
+    if (a === 'up' || a === 'down') {
+      var el = document.querySelector(scope + '[data-act="' + a + '"]');
+      if (el && !el.disabled) el.focus();
+      if (el && ui.mode === 'mobile') el.closest('.circuit').scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+    }
+    if (a === 'inc' || a === 'dec') { var el2 = document.querySelector('.circuit[data-uid="' + f.c.uid + '"] [data-act="' + a + '"][data-k="' + b.dataset.k + '"]'); if (el2 && !el2.disabled) el2.focus(); }
+  });
+  $('#circuits').addEventListener('input', function (e) {
+    var f = findCircuit(e.target);
+    if (!f) return;
+    if (e.target.dataset.field === 'label') f.c.label = e.target.value.slice(0, 40);
+    else if (e.target.dataset.text) f.c.params[e.target.dataset.k] = e.target.value.slice(0, 160);
+    else return;
+    refreshOutputsSoon();
+  });
+  $('#circuits').addEventListener('change', function (e) {
+    var f = findCircuit(e.target);
+    if (!f || e.target.dataset.text) return;
+    if (e.target.dataset.entry) {
+      var ent = Object.assign({}, f.c.entries || {});
+      if (e.target.value) ent[e.target.dataset.entry] = e.target.value; else delete ent[e.target.dataset.entry];
+      if (Object.keys(ent).length) f.c.entries = ent; else delete f.c.entries;
+      ui.entOpen[f.c.uid] = true;
+      var keep = e.target.id;
+      refreshAll();
+      var again = document.getElementById(keep); if (again) again.focus();
+      return;
+    }
+    if (e.target.dataset.field === 'box') { f.c.box = e.target.value; f.c.viaBox = !!f.c.box; }
+    else if (e.target.dataset.k) f.c.params[e.target.dataset.k] = e.target.value;
+    else return;
+    refreshAll();
+  });
+  $('#boxes').addEventListener('input', function (e) {
+    var id = e.target.dataset.bname;
+    if (!id) return;
+    var b = project.boxes.filter(function (x) { return x.id === id; })[0];
+    if (!b) return;
+    b.name = e.target.value.slice(0, 40) || 'Boîte';
+    clearTimeout(outT);
+    outT = setTimeout(function () { rebuild(); renderAlerts(); renderActive(); saveDraft(); document.querySelectorAll('[data-field="box"] option').forEach(function (o) { if (o.value === id) o.textContent = b.name; }); }, 450);
+  });
+  // la carte « Entrées dans la boîte » reste ouverte ou fermée quand la liste est redessinée
+  $('#circuits').addEventListener('toggle', function (e) {
+    var d = e.target;
+    if (d && d.classList && d.classList.contains('entries')) ui.entOpen[d.dataset.ent] = d.open;
+  }, true);
+  $('#boxes').addEventListener('change', function (e) {
+    if (e.target.id === 'opt-tabside') { project.options.tabSide = e.target.value; refreshAll(); }
+    else if (e.target.id === 'opt-gaines') { project.options.gaines = e.target.value; refreshAll(); }
+  });
+  $('#boxes').addEventListener('click', function (e) {
+    if (e.target.closest('#btn-addbox')) {
+      var n = 1; while (project.boxes.some(function (b) { return b.id === 'b' + n; })) n++;
+      project.boxes.push({ id: 'b' + n, name: 'Boîte ' + (project.boxes.length + 1) });
+      refreshAll();
+      var inp = document.querySelector('[data-bname="b' + n + '"]'); if (inp) { inp.focus(); inp.select(); }
+      toast('Boîte ajoutée : choisis-la dans la carte des circuits qui y passent.');
+      return;
+    }
+    var d = e.target.closest('[data-bdel]');
+    if (!d) return;
+    var id = d.dataset.bdel, before = JSON.stringify(project);
+    project.boxes = project.boxes.filter(function (b) { return b.id !== id; });
+    project.circuits.forEach(function (c) { if (c.box === id) { c.box = project.boxes[0].id; } });
+    refreshAll();
+    toast('Boîte supprimée : ses circuits vont dans « ' + project.boxes[0].name + ' ».', 'Annuler', function () { project = normalize(JSON.parse(before)); refreshAll(); });
+  });
+  $('#catalog').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-add]');
+    if (!b) return;
+    var c = defaultCircuit(b.dataset.add);
+    if (c.box) c.box = (project.boxes.filter(function (x) { return x.id === ui.box; })[0] || project.boxes[0]).id;
+    c.viaBox = !!c.box;
+    project.circuits.push(c);
+    if (ui.mode === 'mobile') ui.openUid = c.uid;
+    closeOv(false);
+    refreshAll();
+    var li = document.querySelector('.circuit[data-uid="' + c.uid + '"]');
+    if (li) { li.classList.add('flash'); li.scrollIntoView({ block: ui.mode === 'mobile' ? 'start' : 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' }); }
+    if (ui.mode === 'mobile') toast(CATALOG[c.type].name + ' ajouté.', 'Voir le plan', function () { goView('plans'); });
+    else toast(CATALOG[c.type].name + ' ajouté.');
+  });
+  $('#pname').addEventListener('input', function (e) { project.name = e.target.value.slice(0, 80) || 'Mon installation'; $('#mname').textContent = project.name; fitName(); refreshOutputsSoon(); });
+  $('#idmode').addEventListener('click', function (e) { var b = e.target.closest('[data-idmode]'); if (!b) return; project.options.idMode = b.dataset.idmode; refreshAll(); });
+  $('#idcal').addEventListener('click', function (e) { var b = e.target.closest('[data-idcal]'); if (!b) return; project.options.idCal = Number(b.dataset.idcal); refreshAll(); });
+  $('#btn-sample').addEventListener('click', function () {
+    var before = JSON.stringify(project);
+    project = normalize(sampleProject()); ui.box = null; ui.openUid = null;
+    closeOv(false);
+    refreshAll();
+    $('#panel').scrollTop = 0;
+    toast('Exemple chargé.', 'Annuler', function () { project = normalize(JSON.parse(before)); refreshAll(); });
+  });
+  var clearArm = null;
+  $('#btn-clear').addEventListener('click', function (e) {
+    var b = e.currentTarget, t = b.querySelector('.t');
+    if (!b.classList.contains('armed')) {
+      b.classList.add('armed'); t.textContent = 'Confirmer l\'effacement';
+      clearTimeout(clearArm);
+      clearArm = setTimeout(function () { b.classList.remove('armed'); t.textContent = 'Tout effacer'; }, 4000);
+      return;
+    }
+    clearTimeout(clearArm); b.classList.remove('armed'); t.textContent = 'Tout effacer';
+    var before = JSON.stringify(project);
+    project = normalize({ name: 'Mon installation', options: { idMode: project.options.idMode, idCal: project.options.idCal, idMin: 0 }, boxes: [{ id: 'b1', name: 'Boîte de dérivation' }], circuits: [] });
+    ui.openUid = null;
+    closeOv(false);
+    refreshAll();
+    $('#panel').scrollTop = 0;
+    if (ui.mode === 'mobile') goView('edit');
+    toast('Installation effacée.', 'Annuler', function () { project = normalize(JSON.parse(before)); refreshAll(); });
+  });
+
+  /* ---------------------------------------------------------------- événements de la zone de travail */
+  function setHash(h) { try { history.replaceState(null, '', '#' + h); } catch (err) { /* sans historique */ } }
+  function setTab(t) {
+    ui.tab = t;
+    if (SVG_TABS[t]) ui.plan = t;
+    ui.view = tabView(t);
+    setHash(TABS[t]);
+    applyView();
+    renderActive();
+  }
+  document.querySelector('.tabs').addEventListener('click', function (e) { var b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+  $('.mplans').addEventListener('click', function (e) { var b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+  document.querySelector('.tabs').addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    var order = Object.keys(TABS), i = order.indexOf(ui.tab) + (e.key === 'ArrowRight' ? 1 : -1);
+    setTab(order[(i + order.length) % order.length]);
+    document.querySelector('[data-tab="' + ui.tab + '"]').focus();
+  });
+  $('#boxpick').addEventListener('click', function (e) { var b = e.target.closest('[data-box]'); if (!b) return; ui.box = b.dataset.box; shownSig = ''; renderBoxView(); });
+  var lenT = null;
+  lists.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.id === 'pq') { setPartsQuery(t.value, 'pq'); return; }
+    if (t.dataset.len) {
+      var v = Math.max(0, Number(t.value) || 0), Lg = project.lengths;
+      if (t.dataset.len === 'tb') Lg.tb[t.dataset.box] = Math.min(v, 500); else Lg[t.dataset.len] = Math.min(v, t.dataset.len === 'margin' ? 100 : 500);
+      clearTimeout(lenT);
+      lenT = setTimeout(function () { var r = $('#lenres'); if (r) r.innerHTML = lengthResults(); saveDraft(); }, 250);
+    }
+  });
+  lists.addEventListener('keydown', function (e) {
+    if (e.target.id === 'pq' && e.key === 'Enter') {
+      e.preventDefault();
+      var R = parts.q.trim() ? searchApp(parts.q, parts.shared) : null;
+      if (R && R.refs[0]) selectPart(R.refs[0].id); else if (R && R.types[0]) selectPart('t:' + R.types[0].id); else if (R && parts.sample) startLive();
+    }
+  });
+  lists.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.dataset.step) {
+      if (t.checked) steps.done[t.dataset.step] = 1; else delete steps.done[t.dataset.step];
+      t.closest('li').classList.toggle('done', t.checked);
+      saveSteps();
+      var total = lists.querySelectorAll('[data-step]').length, done = lists.querySelectorAll('[data-step]:checked').length;
+      $('#stepcount').textContent = done + ' / ' + total;
+      var bar = lists.querySelector('.bar'); bar.setAttribute('aria-valuenow', done); bar.firstChild.style.width = (total ? Math.round(done / total * 100) : 0) + '%';
+      var sec = t.closest('section'), sm = sec.querySelector('.sec-count');
+      if (sm) sm.textContent = sec.querySelectorAll('[data-step]:checked').length + ' / ' + sec.querySelectorAll('[data-step]').length;
+      var nx = $('#steps-next'); if (nx) nx.disabled = done === total;
+      if (done === total && total) toast('Bravo, tout est câblé ! Fais vérifier par ton formateur avant la mise sous tension.');
+      return;
+    }
+    if (t.dataset.qwire !== undefined) { quiz.picks[t.dataset.qwire] = t.value; return; }
+    if (t.id === 'qcirc') { quiz.uid = t.value; newRound(); renderQuizView(); return; }
+    if (t.name === 'qerr') { quiz.errPick = t.value; var bt = $('#q-errcheck'); if (bt) bt.disabled = false; }
+  });
+  lists.addEventListener('click', function (e) {
+    var t = e.target;
+    var pr = t.closest('[data-pref]'), pt = t.closest('[data-ptype]');
+    if (pr) { selectPart(pr.dataset.pref); return; }
+    if (pt) { selectPart('t:' + pt.dataset.ptype); return; }
+    var pa = t.closest('[data-padd]');
+    if (pa) { addFromType(pa.dataset.padd); return; }
+    if (t.closest('#p-back')) { parts.mobFiche = false; updatePartsFiche(); lists.scrollTop = 0; return; }
+    if (t.closest('#p-live')) { startLive(); return; }
+    if (t.closest('#p-live-stop')) { if (parts.liveCtl) parts.liveCtl.abort(); return; }
+    var pv = t.closest('[data-pver]'), pd = t.closest('[data-pdel]');
+    if (pv && store.db) { store.db.collection('catalog').doc(pv.dataset.pver).update({ verified: true, verifiedAt: new Date().toISOString() }).then(function () { toast('Fiche marquée comme vérifiée.'); }, function () { toast('Pas possible de modifier la base partagée.'); }); return; }
+    if (pd && store.db) {
+      if (!pd.classList.contains('armed')) { pd.classList.add('armed'); pd.lastChild.textContent = 'Confirmer le retrait'; return; }
+      store.db.collection('catalog').doc(pd.dataset.pdel).delete().then(function () { parts.sel = null; parts.mobFiche = false; updatePartsFiche(); toast('Fiche retirée de la base partagée.'); }, function () { toast('Pas possible de modifier la base partagée.'); });
+      return;
+    }
+    if (t.closest('#steps-reset')) {
+      var b = t.closest('#steps-reset');
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Confirmer'; setTimeout(function () { b.classList.remove('armed'); b.textContent = 'Tout décocher'; }, 3500); return; }
+      steps.done = {}; ui.stepOpen = {}; saveSteps(); renderStepsView(); lists.scrollTop = 0; return;
+    }
+    if (t.closest('#steps-next')) { goNextStep(); return; }
+    var tg = t.closest('.sec-tg');
+    if (tg) {
+      var sec = tg.closest('.stepsec'), open = sec.classList.contains('shut');
+      sec.classList.toggle('shut', !open);
+      tg.setAttribute('aria-expanded', open ? 'true' : 'false');
+      ui.stepOpen[tg.dataset.sec] = open;
+      return;
+    }
+    var qm = t.closest('[data-qmode]');
+    if (qm) { quiz.mode = qm.dataset.qmode; newRound(); renderQuizView(); return; }
+    if (t.closest('#q-check')) { quiz.checked = true; renderQuizView(); return; }
+    if (t.closest('#q-new')) { newRound(); renderQuizView(); return; }
+    if (t.closest('#q-errcheck')) { if (quiz.errPick) { quiz.errChecked = true; renderQuizView(); } return; }
+    if (t.closest('#q-errnew')) { quiz.err = null; quiz.errPick = null; quiz.errChecked = false; renderQuizView(); }
+  });
+
+  (function () {
+    var f = $('#hsearch'), hq = $('#hq');
+    if (!f || !hq) return;
+    hq.addEventListener('input', function () { setPartsQuery(hq.value, 'hq'); if (ui.tab !== 'parts') setTab('parts'); });
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (ui.tab !== 'parts') setTab('parts');
+      var R = parts.q.trim() ? searchApp(parts.q, parts.shared) : null;
+      if (R && R.refs[0]) selectPart(R.refs[0].id); else if (R && R.types[0]) selectPart('t:' + R.types[0].id);
+    });
+    hq.addEventListener('keydown', function (e) { if (e.key === 'Escape') { hq.value = ''; setPartsQuery('', 'hq'); hq.blur(); } });
+  })();
+
+  /* ---------------------------------------------------------------- notifications */
+  var toastT = null;
+  function toast(msg, actionLabel, action) {
+    var t = $('#toast');
+    t.innerHTML = '<span>' + esc(msg) + '</span>' + (actionLabel ? '<button type="button">' + esc(actionLabel) + '</button>' : '');
+    t.classList.add('show');
+    if (actionLabel) t.querySelector('button').onclick = function () { t.classList.remove('show'); action(); };
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { t.classList.remove('show'); }, actionLabel ? 6000 : 3000);
+  }
+
+  /* ---------------------------------------------------------------- téléchargements */
+  var downloads = null;
+  // hors de Claude : téléchargement classique par le navigateur (même forme que la capacité « downloads »)
+  var browserDownloads = { save: function (o) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var type = /\.csv$/i.test(o.filename) ? 'text/csv;charset=utf-8' : (/\.svg$/i.test(o.filename) ? 'image/svg+xml' : 'application/octet-stream');
+        var blob = o.data instanceof Blob ? o.data : new Blob([o.data], { type: type });
+        var url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = o.filename; a.rel = 'noopener'; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 2000);
+        resolve({ status: 'saved' });
+      } catch (e) { reject({ code: 'failed' }); }
+    });
+  } };
+  if (STANDALONE) downloads = browserDownloads;
+  function updateExportButtons() {
+    var ex = $('#exportctl');
+    ex.hidden = !downloads || ui.tab === 'parts';
+    $('#mi-dl').hidden = !downloads;
+    $('#m-dl-btn').hidden = !downloads || ui.view === 'edit';
+    if (downloads) {
+      var svgTab = SVG_TABS[ui.tab] && ui.tab !== 'labels';
+      ex.querySelector('[data-exp="png"]').hidden = !svgTab;
+      ex.querySelector('[data-exp="svg"]').hidden = !svgTab;
+      ex.querySelector('[data-exp="labels"]').hidden = ui.tab !== 'labels';
+    }
+    syncToolbar();
+  }
+  function slug(s) { return (s || 'installation').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'installation'; }
+  function svgToCanvas(svg, maxPx) {
+    var d = svgDims(svg), scale = Math.min(2, Math.sqrt((maxPx || 14e6) / (d.w * d.h)));
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })), img = new Image();
+      img.onload = function () {
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(d.w * scale); cv.height = Math.round(d.h * scale);
+        var ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        resolve(cv);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('svg')); };
+      img.src = url;
+    });
+  }
+  function svgToPng(svg, maxPx) {
+    return svgToCanvas(svg, maxPx).then(function (cv) {
+      return new Promise(function (resolve, reject) { cv.toBlob(function (b) { b ? resolve(b) : reject(new Error('png')); }, 'image/png'); });
+    });
+  }
+  function pdfText(s) { return String(s).replace(/→/g, '->').replace(/≤/g, '<=').replace(/−/g, '-').replace(/[↑]/g, '(haut)').replace(/[↓]/g, '(bas)').replace(/[^\x00-\xFF—…Œœ]/g, ''); }
+  function csvText() {
+    var L = buildLists(model), q = function (v) { v = String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var rows = [['N°', 'Couleur', 'Section (mm²)', 'Circuit', 'Rôle', 'Côté tableau', 'Arrivée']];
+    L.tab.forEach(function (r) { rows.push([r.num, WN[r.c], secTxt(r.sec), r.q + ' ' + r.circuit, r.role, r.from, r.to]); });
+    rows.push([]);
+    rows.push(['Appareil', 'Circuit', 'Fils', 'Section (mm²)', 'Gaine']);
+    L.dev.forEach(function (r) { rows.push([r.ref + ' ' + r.kind, r.q, r.wires.join(' + '), secTxt(r.sec), 'ICTA Ø' + r.gaine]); });
+    L.chain.forEach(function (r) { rows.push([r.from + ' -> ' + r.to, r.q, r.wires.join(' + '), secTxt(r.sec), 'ICTA Ø' + r.gaine]); });
+    rows.push([]);
+    rows.push(['Fil', 'Section (mm²)', 'Longueur (m)', 'À acheter']);
+    computeLengths(model, project.lengths).rows.forEach(function (r) { rows.push([WN[r.c], r.sec, r.m, r.rolls]); });
+    return '﻿' + rows.map(function (r) { return r.map(q).join(';'); }).join('\r\n');
+  }
+  function buildPdf() {
+    var J = window.jspdf && window.jspdf.jsPDF;
+    if (!J) return Promise.reject({ code: 'nolib' });
+    var doc = null, L = buildLists(model);
+    function page(ori) { if (!doc) doc = new J({ unit: 'pt', format: 'a4', orientation: ori }); else doc.addPage('a4', ori); }
+    function slice(cv, d, y0, y1) {
+      var k = cv.width / d.w, sub = document.createElement('canvas');
+      sub.width = cv.width; sub.height = Math.max(1, Math.round((y1 - y0) * k));
+      var ctx = sub.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sub.width, sub.height);
+      ctx.drawImage(cv, 0, Math.round(y0 * k), cv.width, sub.height, 0, 0, sub.width, sub.height);
+      return sub.toDataURL('image/jpeg', 0.92);
+    }
+    function place(url, w, h, pw, ph) {
+      var mw = pw - 48, mh = mw * h / w;
+      if (mh > ph - 48) { mw *= (ph - 48) / mh; mh = ph - 48; }
+      doc.addImage(url, 'JPEG', (pw - mw) / 2, 24, mw, mh);
+    }
+    // boîte : une page pour la boîte (en paysage si elle est large), puis les cartes et la légende, coupées entre deux rangées
+    function addBoxPages(svg) {
+      var d = svgDims(svg), cuts = (renderBox.lastCuts || []).filter(function (c) { return c > 0 && c < d.h; }).sort(function (a, b) { return a - b; });
+      return svgToCanvas(svg, 9e6).then(function (cv) {
+        var first = cuts.length ? cuts[0] : d.h, segs = [[0, first]];
+        if (first < d.h) {
+          var land = d.w > (d.h - first), pw = land ? 842 : 595, ph = land ? 595 : 842, maxH = d.w * (ph - 48) / (pw - 48);
+          var bounds = cuts.slice(1).concat([d.h]), s0 = first, last = first;
+          bounds.forEach(function (b) { if (b - s0 > maxH && last > s0) { segs.push([s0, last]); s0 = last; } last = b; });
+          segs.push([s0, d.h]);
+        }
+        segs.forEach(function (sg) {
+          var h = sg[1] - sg[0], land2 = d.w > h * 1.05;
+          page(land2 ? 'landscape' : 'portrait');
+          place(slice(cv, d, sg[0], sg[1]), d.w, h, land2 ? 842 : 595, land2 ? 595 : 842);
+        });
+      });
+    }
+    function addWidePage(svg) {
+      var d = svgDims(svg);
+      return svgToCanvas(svg, 9e6).then(function (cv) {
+        var land = d.w > d.h * 1.1;
+        page(land ? 'landscape' : 'portrait');
+        place(cv.toDataURL('image/jpeg', 0.92), d.w, d.h, land ? 842 : 595, land ? 595 : 842);
+      });
+    }
+    var chain = Promise.resolve();
+    model.usedBoxes.forEach(function (b) { chain = chain.then(function () { return ensureBoxSvg(b.id); }).then(addBoxPages); });
+    return chain.then(function () { return addWidePage(renderTableau(model)); })
+      .then(function () { return addWidePage(renderUnifilaire(model)); })
+      .then(function () {
+        doc.addPage('a4', 'portrait');
+        var y = 50, x = 40;
+        var line = function (t, size, bold, dx) {
+          var fs = size || 9.5;
+          doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(fs);
+          doc.splitTextToSize(pdfText(t), 515 - (dx || 0)).forEach(function (part, i) {
+            if (y > 800) { doc.addPage('a4', 'portrait'); y = 50; doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(fs); }
+            doc.text(part, x + (dx || 0) + (i ? 14 : 0), y); y += fs * 1.45;
+          });
+        };
+        line('Liste des fils · ' + model.name, 16, true); y += 6;
+        line('Fils qui partent du tableau', 12, true);
+        L.tab.forEach(function (r) { line(r.num + '  ' + WN[r.c] + ' ' + secTxt(r.sec) + ' mm²  ·  ' + r.q + ' ' + r.circuit + '  ·  ' + r.role + '  ·  ' + r.from + ' -> ' + r.to, 9); });
+        if (L.dev.length) { y += 8; line('Câbles entre la boîte et les appareils', 12, true); }
+        L.dev.forEach(function (r) { line(r.ref + ' (' + r.kind + ', ' + r.q + (model.multiBox ? ', ' + r.box : '') + ') : ' + r.wires.join(' + ') + ' · ' + secTxt(r.sec) + ' mm² · ICTA Ø' + r.gaine, 9); });
+        if (L.chain.length) { y += 8; line('Liaisons entre prises (repiquage)', 12, true); }
+        L.chain.forEach(function (r) { line(r.from + ' -> ' + r.to + ' (' + r.q + ') : ' + r.wires.join(' + ') + ' · ' + secTxt(r.sec) + ' mm²', 9); });
+        y += 8; line('Longueurs à prévoir (marge comprise)', 12, true);
+        computeLengths(model, project.lengths).rows.forEach(function (r) { line(WN[r.c] + ' ' + r.sec + ' mm² : ' + r.m + ' m  (' + r.rolls + ')', 9.5); });
+        y += 8; line('Nombre de fils', 12, true);
+        [['Câblage', L.totals], ['Ponts dans le tableau', L.pontTot]].forEach(function (t) {
+          Object.keys(t[1]).forEach(function (sec) {
+            var o = t[1][sec];
+            line(t[0] + ' ' + sec + ' mm² : ' + Object.keys(o).map(function (c) { return o[c] + ' ' + WN[c]; }).join(', '), 9.5);
+          });
+        });
+        y += 8; line('Ponts dans le tableau', 12, true);
+        L.ponts.forEach(function (p) { line(p.txt + ' · ' + WN[p.c] + ' ' + secTxt(p.sec) + ' mm²', 9); });
+        y += 8; line('Matériel', 12, true);
+        var groups = [['Tableau', L.mat.tableau]];
+        if (model.multiBox) Object.keys(L.boxMat).forEach(function (b) { groups.push([b, L.boxMat[b]]); }); else groups.push(['Boîte de dérivation', L.mat.boite]);
+        groups.push(['Appareils', L.mat.appareils]);
+        groups.forEach(function (g) {
+          if (!Object.keys(g[1]).length) return;
+          line(g[0], 10, true);
+          Object.keys(g[1]).forEach(function (k) { line(g[1][k] + ' × ' + k, 9, false, 10); });
+        });
+        return doc.output('blob');
+      });
+  }
+  function buildLabelsPdf() {
+    var J = window.jspdf && window.jspdf.jsPDF;
+    if (!J) return Promise.reject({ code: 'nolib' });
+    var pages = labelsLayout(model), doc = new J({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    pages.forEach(function (pg, i) {
+      if (i) doc.addPage('a4', 'portrait');
+      pg.forEach(function (p) {
+        if (p.t === 'rect') {
+          var mode = p.fill && p.stroke ? 'FD' : (p.fill ? 'F' : 'S');
+          if (p.fill) doc.setFillColor(p.fill);
+          if (p.stroke) { doc.setDrawColor(p.stroke); doc.setLineWidth(0.2); doc.setLineDashPattern(p.dash ? [1.2, 0.8] : [], 0); }
+          doc.rect(p.x, p.y, p.w, p.h, mode);
+          doc.setLineDashPattern([], 0);
+          if (p.stripe) { doc.setFillColor('#f5d40f'); for (var yy = p.y + 0.9; yy < p.y + p.h - 0.6; yy += 2.2) doc.rect(p.x, yy, p.w, 0.9, 'F'); }
+        } else {
+          doc.setFont('helvetica', p.bold ? 'bold' : 'normal'); doc.setFontSize(p.size); doc.setTextColor(p.color || '#111111');
+          var s = pdfText(p.s);
+          if (p.maxw) { while (s.length > 2 && doc.getTextWidth(s) > p.maxw) s = s.slice(0, -2) + '…'; }
+          doc.text(s, p.x, p.y, { align: p.align === 'center' ? 'center' : 'left' });
+        }
+      });
+    });
+    return Promise.resolve(doc.output('blob'));
+  }
+  $('#exportctl').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-exp]');
+    if (!b || !downloads) return;
+    if (!model.circuits.length) { toast('Ajoute au moins un circuit.'); return; }
+    var kind = b.dataset.exp, base = slug(project.name), job, tabNow = ui.tab;
+    b.disabled = true;
+    if (ui.mode === 'mobile') closeOv(false);
+    if (kind === 'svg' || kind === 'png') {
+      var bid = curBox(), bname = bid ? model.boxes.filter(function (x) { return x.id === bid; })[0].name : 'boite';
+      var names = { box: model.multiBox ? slug(bname) : 'boite-derivation', tab: 'tableau', uni: 'unifilaire' };
+      var get = tabNow === 'box' ? (bid ? ensureBoxSvg(bid) : Promise.reject({ code: 'empty' })) : Promise.resolve(tabNow === 'tab' ? renderTableau(model) : renderUnifilaire(model));
+      if (tabNow === 'box' && bid) toast('Préparation du plan…');
+      job = get.then(function (svg) {
+        if (kind === 'svg') return downloads.save({ filename: base + '-' + names[tabNow] + '.svg', data: svg });
+        return svgToPng(svg).then(function (png) { return downloads.save({ filename: base + '-' + names[tabNow] + '.png', data: png }); });
+      });
+    } else if (kind === 'pdf') {
+      toast('Préparation du PDF…');
+      job = buildPdf().then(function (blob) { return downloads.save({ filename: base + '.pdf', data: blob }); });
+    } else if (kind === 'labels') {
+      job = buildLabelsPdf().then(function (blob) { return downloads.save({ filename: base + '-etiquettes.pdf', data: blob }); });
+    } else {
+      job = downloads.save({ filename: base + '-fils.csv', data: csvText() });
+    }
+    job.then(function (r) { if (r && r.status === 'saved') toast('Fichier téléchargé.'); })
+      .catch(function (err) {
+        if (err && err.code === 'declined') return;
+        if (err && err.code === 'empty') { toast('Aucun circuit ne passe par une boîte.'); return; }
+        toast(err && err.code === 'nolib' ? 'Le module PDF n\'a pas pu se charger. Essaie PNG ou SVG.' : 'Le téléchargement n\'a pas abouti. Réessaie.');
+      })
+      .then(function () { b.disabled = false; });
+  });
+
+  /* ---------------------------------------------------------------- mes installations */
+  var store = { mode: 'local', db: null, uid: null };
+  function localList() { try { var v = JSON.parse(lsGet(SAVED_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+  function listSaved() {
+    if (store.mode === 'db') {
+      return store.db.collection('data/users/' + store.uid).get().then(function (snap) {
+        return snap.docs.filter(function (d) { return d.exists && d.id.indexOf('steps-') !== 0; }).map(function (d) { var x = d.data(); return { id: d.id, name: x.name, savedAt: x.savedAt, project: x.project }; })
+          .filter(function (x) { return x.project; });
+      }).catch(function () { store.mode = 'local'; return localList(); });
+    }
+    return Promise.resolve(localList());
+  }
+  function saveCurrent() {
+    var snap = JSON.parse(JSON.stringify(project)), id = 'p' + Date.now().toString(36);
+    var existing = savedCache.filter(function (s) { return s.name === project.name; })[0];
+    if (existing) id = existing.id;
+    var rec = { id: id, name: project.name, savedAt: new Date().toISOString(), project: snap };
+    if (store.mode === 'db') {
+      return store.db.collection('data/users/' + store.uid).doc(id).set({ name: rec.name, savedAt: rec.savedAt, project: snap })
+        .catch(function () { store.mode = 'local'; return saveLocal(rec); });
+    }
+    return Promise.resolve(saveLocal(rec));
+  }
+  function saveLocal(rec) {
+    var l = localList().filter(function (s) { return s.id !== rec.id; });
+    l.unshift(rec); lsSet(SAVED_KEY, JSON.stringify(l.slice(0, 30)));
+  }
+  function removeSaved(id) {
+    if (store.mode === 'db') return store.db.collection('data/users/' + store.uid).doc(id).delete().catch(function () {});
+    lsSet(SAVED_KEY, JSON.stringify(localList().filter(function (s) { return s.id !== id; })));
+    return Promise.resolve();
+  }
+  var savedCache = [];
+  function renderSaved() {
+    listSaved().then(function (l) {
+      l.sort(function (a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
+      savedCache = l;
+      $('#saved').innerHTML = l.map(function (s) {
+        var d = s.savedAt ? new Date(s.savedAt) : null;
+        return '<li data-id="' + esc(s.id) + '"><span>' + esc(s.name || 'Sans nom') + ' <small>' + (d ? d.toLocaleDateString('fr-FR') : '') + '</small></span>' +
+          '<button type="button" data-sv="open">Ouvrir</button><button type="button" data-sv="del" class="danger" aria-label="Supprimer ' + esc(s.name || '') + '">✕</button></li>';
+      }).join('');
+      $('#saved-hint').textContent = l.length ? '' : (store.mode === 'db' ? 'Tes installations enregistrées apparaîtront ici.' : 'Enregistré dans ce navigateur uniquement.');
+    });
+  }
+  function doSave() {
+    return saveCurrent().then(function () { toast('« ' + project.name + ' » enregistrée.'); renderSaved(); });
+  }
+  $('#btn-save').addEventListener('click', doSave);
+  $('#saved').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-sv]');
+    if (!b) return;
+    var id = b.closest('li').dataset.id, rec = savedCache.filter(function (s) { return s.id === id; })[0];
+    if (!rec) return;
+    if (b.dataset.sv === 'open') {
+      var p = normalize(rec.project);
+      if (p) { project = p; ui.box = null; ui.openUid = null; closeOv(false); refreshAll(); $('#panel').scrollTop = 0; toast('« ' + rec.name + ' » ouverte.'); }
+    } else {
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Supprimer ?'; setTimeout(function () { b.classList.remove('armed'); b.textContent = '✕'; }, 3500); return; }
+      removeSaved(id).then(function () { toast('« ' + rec.name + ' » supprimée.'); renderSaved(); });
+    }
+  });
+
+  /* ---------------------------------------------------------------- fenêtres (menus, dialogues, feuilles du bas)
+     Ordinateur : menu déroulant sous son bouton, ou boîte de dialogue au centre.
+     Téléphone : toutes les fenêtres montent du bas de l'écran, sur un voile qui les ferme. */
+  var OV = { el: null, opener: null };
+  var scrim = $('#scrim');
+  function isModalOv(el) { return ui.mode === 'mobile' || el.classList.contains('dlg'); }
+  function placePop(el, op) {
+    el.style.top = el.style.bottom = el.style.left = el.style.maxHeight = '';
+    if (!op || !op.getBoundingClientRect || !op.offsetParent) { el.style.top = '64px'; el.style.left = Math.max(8, (root.clientWidth - el.offsetWidth) / 2) + 'px'; return; }
+    var r = op.getBoundingClientRect(), vw = root.clientWidth, vh = window.innerHeight, w = el.offsetWidth;
+    var left = el.dataset.align === 'end' ? r.right - w : r.left;
+    el.style.left = Math.max(8, Math.min(left, vw - w - 8)) + 'px';
+    var below = vh - r.bottom - 14, above = r.top - 14;
+    if (below >= 280 || below >= above) { el.style.top = (r.bottom + 6) + 'px'; el.style.maxHeight = Math.max(160, below) + 'px'; }
+    else { el.style.bottom = (vh - r.top + 6) + 'px'; el.style.maxHeight = Math.max(160, above) + 'px'; }
+  }
+  function openOv(id, opener) {
+    var el = $('#' + id);
+    if (!el) return;
+    if (OV.el === el) { closeOv(); return; }
+    // une fenêtre ouverte depuis une autre (le menu) rendra la main au bouton d'origine
+    if (opener && opener.closest && opener.closest('.ov') && OV.opener) opener = OV.opener;
+    closeOv(false);
+    OV.el = el; OV.opener = opener || null;
+    el.hidden = false;
+    var modal = isModalOv(el);
+    el.setAttribute('aria-modal', modal ? 'true' : 'false');
+    scrim.hidden = !modal;
+    if (!modal) placePop(el, opener);
+    else el.style.top = el.style.bottom = el.style.left = el.style.maxHeight = '';
+    if (opener && opener.hasAttribute && opener.hasAttribute('aria-expanded')) opener.setAttribute('aria-expanded', 'true');
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+  }
+  function closeOv(restore) {
+    var el = OV.el;
+    if (!el) return;
+    el.hidden = true; scrim.hidden = true;
+    var op = OV.opener;
+    OV.el = null; OV.opener = null;
+    if (op && op.hasAttribute && op.hasAttribute('aria-expanded')) op.setAttribute('aria-expanded', 'false');
+    if (restore !== false && op && op.focus && op.offsetParent) { try { op.focus({ preventScroll: true }); } catch (e) { op.focus(); } }
+  }
+  scrim.addEventListener('click', function () { closeOv(); });
+  // un clic en dehors d'un menu déroulant le ferme
+  document.addEventListener('pointerdown', function (e) {
+    if (!OV.el || isModalOv(OV.el)) return;
+    if (OV.el.contains(e.target) || (OV.opener && OV.opener.contains && OV.opener.contains(e.target))) return;
+    closeOv(false);
+  }, true);
+  // si la liste qui porte le bouton défile, le menu déroulant ne serait plus en face : on le ferme
+  document.addEventListener('scroll', function (e) {
+    if (!OV.el || isModalOv(OV.el) || !OV.opener) return;
+    var t = e.target === document ? document.documentElement : e.target;
+    if (t && t.nodeType === 1 && t.contains(OV.opener)) closeOv(false);
+  }, true);
+  window.addEventListener('resize', function () { if (OV.el && !isModalOv(OV.el)) closeOv(false); });
+  document.addEventListener('keydown', function (e) {
+    if (!OV.el) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeOv(); return; }
+    if (e.key !== 'Tab' || !isModalOv(OV.el)) return;
+    // garde la tabulation dans la fenêtre
+    var f = Array.prototype.filter.call(OV.el.querySelectorAll('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])'), function (x) { return !x.disabled && x.offsetParent !== null; });
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1], a = document.activeElement;
+    if (!OV.el.contains(a) || a === OV.el) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey && a === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+  });
+
+  /* ---------------------------------------------------------------- interface : téléphone ou ordinateur */
+  var MQ = window.matchMedia ? window.matchMedia('(max-width: 820px), (max-height: 520px) and (pointer: coarse)') : null;
+  var VIEW_NAMES = { edit: 'Circuits', plans: 'Plans', list: 'Fils et longueurs', steps: 'Pas à pas', quiz: 'Entraînement', parts: 'Appareils' };
+  function wantMode() { return ui.pref === 'mobile' || ui.pref === 'pc' ? ui.pref : (MQ && MQ.matches ? 'mobile' : 'pc'); }
+  // quelques éléments changent de place selon l'interface (le reste ne fait que changer d'allure)
+  function placeElements() {
+    var mob = ui.mode === 'mobile';
+    (mob ? $('#slot-m-name') : $('#slot-pc-name')).appendChild($('#fld-name'));
+    if (mob) $('#slot-m-alerts').appendChild($('#alerts')); else $('#work').insertBefore($('#alerts'), $('#toolbar'));
+    (mob ? $('#slot-m-dl') : $('#toolbar')).appendChild($('#exportctl'));
+  }
+  function applyMode(force) {
+    var m = wantMode();
+    if (m === ui.mode && !force) return;
+    var first = ui.mode === null;
+    ui.mode = m;
+    root.setAttribute('data-ui', m);
+    closeOv(false);
+    placeElements();
+    fitName();
+    if (m === 'pc') hideZhint(false);
+    applyView();
+    syncUiModeSeg();
+    if (!first) { renderPanel(); renderAlerts(); renderActive(); }
+    fitTabsSoon();
+  }
+  if (MQ) {
+    if (MQ.addEventListener) MQ.addEventListener('change', function () { applyMode(); });
+    else if (MQ.addListener) MQ.addListener(function () { applyMode(); });
+  }
+  function syncUiModeSeg() {
+    document.querySelectorAll('[data-uimode]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.uimode === ui.pref ? 'true' : 'false'); });
+    $('#uimode-hint').textContent = ui.pref === 'auto'
+      ? 'Automatique : interface ' + (ui.mode === 'mobile' ? 'téléphone' : 'ordinateur') + ' pour cet écran.'
+      : 'Gardé sur cet appareil. Choisis Auto pour suivre la taille de l\'écran.';
+  }
+  $('#uimode').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-uimode]');
+    if (!b) return;
+    ui.pref = b.dataset.uimode;
+    lsSet(UI_KEY, ui.pref);
+    var before = ui.mode;
+    applyMode();
+    syncUiModeSeg();
+    if (before !== ui.mode) toast(ui.mode === 'mobile' ? 'Interface téléphone.' : 'Interface ordinateur.');
+  });
+
+  /* -- vues du téléphone (onglets du bas) */
+  function applyView() {
+    root.setAttribute('data-view', ui.view);
+    document.querySelectorAll('.mnav [data-view]').forEach(function (b) {
+      if (b.dataset.view === ui.view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    $('#mview').textContent = VIEW_NAMES[ui.view] || '';
+    $('#m-dl-btn').hidden = !downloads || ui.view === 'edit';
+    if (ui.view !== 'plans') hideZhint(false);
+  }
+  function scrollViewTop(v) {
+    var el = v === 'edit' ? $('#panel') : (v === 'plans' ? viewer : lists);
+    if (el.scrollTo) el.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }); else el.scrollTop = 0;
+  }
+  function goView(v) {
+    if (v === ui.view && ui.mode === 'mobile') { scrollViewTop(v); return; }
+    if (v === 'edit') { ui.view = 'edit'; setHash('circuits'); applyView(); return; }
+    setTab(v === 'plans' ? (ui.plan || 'box') : v);
+  }
+  $('.mnav').addEventListener('click', function (e) { var b = e.target.closest('[data-view]'); if (b) goView(b.dataset.view); });
+  // lien direct vers un onglet (#tableau, #pas-a-pas…) ou vers les circuits (#circuits)
+  window.addEventListener('hashchange', function () {
+    var h = (location.hash || '').replace('#', '');
+    if (h === 'circuits') { if (ui.mode === 'mobile') goView('edit'); return; }
+    Object.keys(TABS).forEach(function (k) { if (TABS[k] === h && (k !== ui.tab || ui.view === 'edit')) setTab(k); });
+  });
+
+  /* -- ordinateur : les onglets se resserrent quand la planche est étroite (raccourcis cachés, libellés courts, puis deux lignes) */
+  var tabsEl = document.querySelector('.tabs');
+  function fitTabs() {
+    var steps = ['nokbd', 'short', 'wrap'];
+    steps.forEach(function (c) { tabsEl.classList.remove(c); });
+    if (ui.mode !== 'pc') return;
+    for (var i = 0; i < steps.length && tabsEl.scrollWidth > tabsEl.clientWidth + 1; i++) tabsEl.classList.add(steps[i]);
+  }
+  var ftF = 0;
+  function fitTabsSoon() { cancelAnimationFrame(ftF); ftF = requestAnimationFrame(fitTabs); }
+  if (window.ResizeObserver) new ResizeObserver(fitTabsSoon).observe($('#work'));
+  window.addEventListener('resize', fitTabsSoon);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitTabsSoon);
+
+  /* -- ordinateur : volet des circuits repliable et redimensionnable */
+  function togglePanel(open) {
+    var closed = open === undefined ? root.getAttribute('data-panel') !== 'closed' : !open;
+    if (closed) root.setAttribute('data-panel', 'closed'); else root.removeAttribute('data-panel');
+    lsSet(PANEL_KEY, closed ? 'closed' : 'open');
+    var b = $('#btn-panel');
+    b.setAttribute('aria-expanded', closed ? 'false' : 'true');
+    b.title = (closed ? 'Afficher' : 'Masquer') + ' le volet des circuits (P)';
+  }
+  (function () {
+    var rz = $('#resizer'), drag = null;
+    function setW(w) { w = Math.max(300, Math.min(640, Math.round(w))); root.style.setProperty('--side-w', w + 'px'); return w; }
+    rz.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      drag = { x: e.clientX, w: $('#panel').getBoundingClientRect().width };
+      try { rz.setPointerCapture(e.pointerId); } catch (err) { /* sans capture */ }
+      rz.classList.add('drag');
+      e.preventDefault();
+    });
+    rz.addEventListener('pointermove', function (e) { if (drag) setW(drag.w + e.clientX - drag.x); });
+    function end() { if (!drag) return; drag = null; rz.classList.remove('drag'); lsSet(SIDEW_KEY, String(Math.round($('#panel').getBoundingClientRect().width))); }
+    rz.addEventListener('pointerup', end);
+    rz.addEventListener('pointercancel', end);
+    rz.addEventListener('dblclick', function () { setW(400); lsSet(SIDEW_KEY, '400'); });
+    rz.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      lsSet(SIDEW_KEY, String(setW($('#panel').getBoundingClientRect().width + (e.key === 'ArrowRight' ? 20 : -20))));
+    });
+  })();
+
+  /* -- boutons d'action, où qu'ils soient (en-tête, menu, messages vides) */
+  function openAdd(opener) {
+    if (ui.mode === 'mobile') { if (ui.view !== 'edit') goView('edit'); openOv('ov-add', opener || $('#fab-add')); return; }
+    if (root.getAttribute('data-panel') === 'closed') togglePanel(true);
+    openOv('ov-add', opener && opener.id === 'btn-add' ? opener : $('#btn-add'));
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-close]')) { closeOv(); return; }
+    var b = e.target.closest('[data-do]');
+    if (!b || b.disabled) return;
+    var a = b.dataset.do;
+    if (a === 'add') openAdd(b);
+    else if (a === 'gen') { renderGen(); openOv('ov-gen', b); }
+    else if (a === 'saved') { renderSaved(); openOv('ov-saved', b); }
+    else if (a === 'save') { closeOv(false); doSave(); }
+    else if (a === 'menu') openOv('ov-menu', b);
+    else if (a === 'dl') openOv('ov-dl', b);
+    else if (a === 'keys') openOv('ov-keys', b);
+    else if (a === 'parts') { closeOv(false); openParts(); }
+    else if (a === 'panel') togglePanel();
+    else if (a === 'alerts') {
+      ui.alertsOpen = true;
+      goView('edit');
+      var d = $('#alerts details'); if (d) d.open = true;
+      $('#alerts').scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+    }
+  });
+
+  /* -- raccourcis clavier */
+  function typing(t) {
+    if (!t || !t.tagName) return false;
+    if (t.isContentEditable || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+    return t.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range)$/i.test(t.type);
+  }
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); closeOv(false); doSave(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || OV.el || typing(e.target)) return;
+    var k = e.key;
+    if (/^[1-8]$/.test(k)) { e.preventDefault(); setTab(TAB_ORDER[+k - 1]); return; }
+    if (k === '/') { e.preventDefault(); if (ui.mode === 'pc' && $('#hq')) { $('#hq').focus(); $('#hq').select(); } else openParts(); return; }
+    if (SVG_TABS[ui.tab] && (k === '+' || k === '=')) { e.preventDefault(); zoomBy(1.25); return; }
+    if (SVG_TABS[ui.tab] && (k === '-' || k === '_' || k === '−')) { e.preventDefault(); zoomBy(1 / 1.25); return; }
+    if (SVG_TABS[ui.tab] && k === '0') { e.preventDefault(); zoomFit(); return; }
+    if (k === 'n' || k === 'N') { e.preventDefault(); openAdd(); return; }
+    if ((k === 'p' || k === 'P') && ui.mode === 'pc') { e.preventDefault(); togglePanel(); return; }
+    if (k === '?') { e.preventDefault(); openOv('ov-keys', document.querySelector('.kbtn')); }
+  });
+
+  /* ---------------------------------------------------------------- démarrage */
+  renderCatalog();
+  if (root.getAttribute('data-panel') === 'closed') togglePanel(false);
+  applyMode(true);
+  refreshAll();
+  renderSaved();
+  if (window.claude && typeof window.claude.use === 'function') {
+    // page servie seule (pas dans le cadre de Claude) : le navigateur peut télécharger lui-même
+    window.claude.use('downloads').then(function (d) { downloads = d || (FRAMED ? null : browserDownloads); updateExportButtons(); }).catch(function () {});
+    window.claude.use('sample').then(function (smp) { parts.sample = smp || null; if (ui.tab === 'parts') updatePartsList(); }).catch(function () {});
+    Promise.all([window.claude.use('db'), window.claude.use('user')]).then(function (r) {
+      var db = r[0], user = r[1];
+      if (!db || !user) return null;
+      return user.id().then(function (uid) {
+        if (!uid) return;
+        store.db = db; store.uid = uid; store.mode = 'db';
+        renderSaved();
+        watchShared(db);
+        user.isOwner().then(function (v) { parts.owner = !!v; if (ui.tab === 'parts') updatePartsFiche(); });
+        user.canEdit().then(function (v) { parts.canEdit = !!v; });
+        if (steps.key) { var k = steps.key; steps.key = null; if (ui.tab === 'steps') renderStepsView(); else loadSteps(k); }
+      });
+    }).catch(function () {});
+  }
+})();
+
+</script>
+
